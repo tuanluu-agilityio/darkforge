@@ -5,6 +5,7 @@ import { gateCommand } from "./lib/gate.mjs";
 import { ledgerCommand } from "./lib/ledger.mjs";
 import { memoryCommand } from "./lib/memory.mjs";
 import { initCommand } from "./lib/init.mjs";
+import { taskCommand } from "./lib/task.mjs";
 
 /** Command registry: name -> async (args, ctx) => exit code. Later tasks add entries here. */
 export const commands = {
@@ -12,6 +13,7 @@ export const commands = {
   init: initCommand,
   ledger: ledgerCommand,
   memory: memoryCommand,
+  task: taskCommand,
   async doctor(_args, ctx) {
     const r = doctor({ cwd: ctx.cwd });
     ctx.stdout(r.lines.join("\n") + "\n");

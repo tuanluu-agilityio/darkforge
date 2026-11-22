@@ -4,10 +4,12 @@ import { doctor } from "./lib/doctor.mjs";
 import { gateCommand } from "./lib/gate.mjs";
 import { ledgerCommand } from "./lib/ledger.mjs";
 import { memoryCommand } from "./lib/memory.mjs";
+import { initCommand } from "./lib/init.mjs";
 
 /** Command registry: name -> async (args, ctx) => exit code. Later tasks add entries here. */
 export const commands = {
   gate: gateCommand,
+  init: initCommand,
   ledger: ledgerCommand,
   memory: memoryCommand,
   async doctor(_args, ctx) {

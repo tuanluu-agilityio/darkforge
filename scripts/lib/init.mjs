@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_CONFIG } from "./config.mjs";
+import { DEFAULT_CONFIG, validateConfig } from "./config.mjs";
 
 const TEMPLATES = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "templates");
 const BEGIN = "<!-- darkforge:begin -->";
@@ -51,42 +51,53 @@ function constraintsList(items) {
 function readConfigFile(root) {
   const file = path.join(root, ".darkforge", "config.json");
   if (!exists(file)) return null;
+  let parsed;
   try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8").replace(/^﻿/, ""));
-    return isObj(parsed) ? parsed : null;
-  } catch {
-    return null;
+    parsed = JSON.parse(fs.readFileSync(file, "utf8").replace(/^﻿/, ""));
+  } catch (e) {
+    throw new Error(`${file} is not valid JSON (${e.message}); fix or remove it. Nothing was written`);
   }
+  if (!isObj(parsed)) throw new Error(`${file} must contain a JSON object; fix or remove it. Nothing was written`);
+  return parsed;
 }
 
 function mergeBlock(existing, block) {
   const eol = existing.includes("\r\n") ? "\r\n" : "\n";
   const body = block.replace(/\r?\n$/, "").split(/\r?\n/).join(eol);
   const full = `${BEGIN}${eol}${body}${eol}${END}`;
-  const b = existing.indexOf(BEGIN);
-  const e = b >= 0 ? existing.indexOf(END, b + BEGIN.length) : -1;
-  if (b >= 0 && e >= 0) return existing.slice(0, b) + full + existing.slice(e + END.length);
-  const sep = existing === "" ? "" : existing.endsWith("\n") ? eol : eol + eol;
-  return existing + sep + full + eol;
+  const found = [...existing.matchAll(/^<!-- darkforge:(begin|end) -->[ \t]*\r?$/gm)].map((m) => ({
+    kind: m[1],
+    start: m.index,
+    end: m.index + m[0].replace(/[ \t\r]+$/, "").length,
+  }));
+  if (found.length === 0) {
+    const sep = existing === "" ? "" : existing.endsWith("\n") ? eol : eol + eol;
+    return existing + sep + full + eol;
+  }
+  if (found.length === 2 && found[0].kind === "begin" && found[1].kind === "end") {
+    return existing.slice(0, found[0].start) + full + existing.slice(found[1].end);
+  }
+  throw new Error(`CLAUDE.md has unbalanced darkforge markers (need exactly one ${BEGIN} line followed by one ${END} line); fix them. Nothing was written`);
 }
 
 export function applyInit(root, answers = {}) {
-  const written = [];
+  const plan = [];
   const skipped = [];
   const rel = (f) => path.relative(root, f).split(path.sep).join("/");
+  // Compute every output first; write only at the end so a failure leaves nothing half-done.
   const put = (file, content, { overwrite = false } = {}) => {
-    if (exists(file) && !overwrite) {
+    if (exists(file) && (!overwrite || fs.readFileSync(file, "utf8") === content)) {
       skipped.push(rel(file));
       return false;
     }
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, content);
-    written.push(rel(file));
+    plan.push({ file, content });
     return true;
   };
 
   const base = readConfigFile(root) ?? clone(DEFAULT_CONFIG);
-  const config = deepMerge(base, answers.config ?? {});
+  const valid = validateConfig(deepMerge(base, answers.config ?? {}));
+  if (!valid.ok) throw new Error(`${valid.error}. Nothing was written`);
+  const config = valid.config;
   const createGate = answers.createGate === true;
   if (createGate) {
     if (!config.gate.command.windows) config.gate.command.windows = GATE_CMD.windows;
@@ -132,6 +143,12 @@ export function applyInit(root, answers = {}) {
     const eol = cur.includes("\r\n") ? "\r\n" : "\n";
     const lead = cur === "" || cur.endsWith("\n") ? "" : eol;
     put(ignore, cur + lead + missing.join(eol) + eol, { overwrite: true });
+  }
+  const written = [];
+  for (const { file, content } of plan) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, content);
+    written.push(rel(file));
   }
   return { written, skipped };
 }

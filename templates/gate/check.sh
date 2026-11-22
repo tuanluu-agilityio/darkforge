@@ -4,9 +4,10 @@
 set -u
 fail=0
 step() {
-  echo "== $1"
+  name=$1
+  echo "== $name"
   shift
-  "$@" || { echo "CHECK FAILED: $1"; fail=1; }
+  "$@" || { echo "CHECK FAILED: $name"; fail=1; }
 }
 # TODO: build
 step build true

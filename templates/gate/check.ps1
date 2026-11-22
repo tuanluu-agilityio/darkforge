@@ -1,11 +1,17 @@
 # Quality gate skeleton. Replace each TODO with the project's real command.
 # Prints the success marker as a whole line only when every step passed.
-$ErrorActionPreference = 'Continue'
 $fail = $false
 function Invoke-Step($name, [scriptblock]$body) {
   Write-Output "== $name"
-  & $body
-  if (-not $?) { Write-Output "CHECK FAILED: $name"; $script:fail = $true }
+  $global:LASTEXITCODE = 0
+  $failed = $false
+  try {
+    $ErrorActionPreference = 'Stop'
+    & $body
+  } catch {
+    $failed = $true
+  }
+  if ($failed -or $global:LASTEXITCODE -ne 0) { Write-Output "CHECK FAILED: $name"; $script:fail = $true }
 }
 # TODO: build
 Invoke-Step 'build' { $true | Out-Null }

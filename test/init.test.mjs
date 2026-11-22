@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { applyInit, saveDefaults, loadDefaults, render } from "../scripts/lib/init.mjs";
 import { loadConfig } from "../scripts/lib/config.mjs";
 import { lintMemory } from "../scripts/lib/memory.mjs";
@@ -124,4 +125,111 @@ test("CLI init apply runs in cwd (path with space)", async () => {
   assert.equal(code, 0);
   assert.match(out.join(""), /written \.darkforge\/config\.json/);
   assert.equal(await main(["init", "apply"], { cwd: d, stdout() {}, stderr() {} }), 1);
+});
+
+function snapshot(d) {
+  const out = {};
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else out[path.relative(d, p)] = fs.readFileSync(p, "utf8");
+    }
+  };
+  walk(d);
+  return out;
+}
+
+async function cli(d, ...args) {
+  const err = [];
+  const code = await main(args, { cwd: d, stdout() {}, stderr: (s) => err.push(s) });
+  return { code, err: err.join("") };
+}
+
+test("malformed config.json: refused, nothing written, CLI exits 1", async () => {
+  const d = tmp();
+  fs.mkdirSync(path.join(d, ".darkforge"));
+  fs.writeFileSync(path.join(d, ".darkforge", "config.json"), "{ not json");
+  fs.writeFileSync(path.join(d, "ans.json"), JSON.stringify(ANSWERS));
+  const before = snapshot(d);
+  assert.throws(() => applyInit(d, ANSWERS), /not valid JSON/);
+  const r = await cli(d, "init", "apply", "--answers", "ans.json");
+  assert.equal(r.code, 1);
+  assert.deepEqual(snapshot(d), before);
+  fs.writeFileSync(path.join(d, ".darkforge", "config.json"), "[1]");
+  assert.throws(() => applyInit(d, ANSWERS), /JSON object/);
+});
+
+test("wrong-typed answer is rejected and nothing is written", () => {
+  const d = tmp();
+  assert.throws(() => applyInit(d, { config: { riskAreas: "x" } }), /riskAreas/);
+  assert.deepEqual(fs.readdirSync(d), []);
+});
+
+test("unchanged config is reported skipped", () => {
+  const d = tmp();
+  applyInit(d, ANSWERS);
+  const r = applyInit(d, ANSWERS);
+  assert.ok(r.skipped.includes(".darkforge/config.json"));
+  assert.ok(!r.written.includes(".darkforge/config.json"));
+});
+
+test("CLAUDE.md markers: only whole lines count; unbalanced markers refused", () => {
+  const d = tmp();
+  const quoted = "use `<!-- darkforge:begin -->` markers\nand <!-- darkforge:end --> inline\n";
+  fs.writeFileSync(path.join(d, "CLAUDE.md"), quoted);
+  applyInit(d, ANSWERS);
+  assert.ok(read(d, "CLAUDE.md").startsWith(quoted + "\n<!-- darkforge:begin -->\n"));
+  for (const bad of [
+    "keep\n<!-- darkforge:begin -->\nuser text\n",
+    "x\n<!-- darkforge:end -->\n",
+    "<!-- darkforge:end -->\nmid\n<!-- darkforge:begin -->\n",
+    "<!-- darkforge:begin -->\na\n<!-- darkforge:end -->\n<!-- darkforge:begin -->\nb\n<!-- darkforge:end -->\n",
+  ]) {
+    const e = tmp();
+    fs.writeFileSync(path.join(e, "CLAUDE.md"), bad);
+    assert.throws(() => applyInit(e, ANSWERS), /unbalanced/);
+    assert.equal(read(e, "CLAUDE.md"), bad);
+    assert.equal(fs.existsSync(path.join(e, ".darkforge")), false);
+  }
+});
+
+const available = (cmd, args) => spawnSync(cmd, args, { encoding: "utf8" }).status === 0;
+const psExe = ["powershell", "pwsh"].find((c) => available(c, ["-NoProfile", "-Command", "exit 0"]));
+const hasBash = available("bash", ["-c", "true"]);
+
+function gateRun(exe, args, file, edit) {
+  const d = tmp();
+  applyInit(d, { createGate: true });
+  const f = path.join(d, "scripts", file);
+  const text = fs.readFileSync(f, "utf8");
+  const edited = edit(text);
+  assert.notEqual(edited, text);
+  fs.writeFileSync(f, edited);
+  return spawnSync(exe, [...args, `scripts/${file}`], { cwd: d, encoding: "utf8" });
+}
+const hasMarker = (r) => r.stdout.split(/\r?\n/).some((l) => l.trim() === "ALL CHECKS PASSED");
+
+test("check.sh skeleton: failing step -> no marker, non-zero, names the step", { skip: !hasBash && "bash not available" }, () => {
+  const bad = gateRun("bash", [], "check.sh", (t) => t.replace("step build true", "step build false"));
+  assert.notEqual(bad.status, 0);
+  assert.equal(hasMarker(bad), false);
+  assert.match(bad.stdout, /CHECK FAILED: build/);
+  const good = gateRun("bash", [], "check.sh", (t) => t + "\n");
+  assert.equal(good.status, 0);
+  assert.equal(hasMarker(good), true);
+});
+
+test("check.ps1 skeleton: failing native step -> no marker, non-zero", { skip: !psExe && "powershell not available" }, () => {
+  const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"];
+  const failing = process.platform === "win32" ? "{ cmd /c exit 3 }" : "{ sh -c 'exit 3' }";
+  const bad = gateRun(psExe, args, "check.ps1", (t) => t.replace("Invoke-Step 'build' { $true | Out-Null }", `Invoke-Step 'build' ${failing}`));
+  assert.notEqual(bad.status, 0);
+  assert.equal(hasMarker(bad), false);
+  const thrown = gateRun(psExe, args, "check.ps1", (t) => t.replace("Invoke-Step 'build' { $true | Out-Null }", "Invoke-Step 'build' { throw 'x' }"));
+  assert.notEqual(thrown.status, 0);
+  assert.equal(hasMarker(thrown), false);
+  const good = gateRun(psExe, args, "check.ps1", (t) => t + "\n");
+  assert.equal(good.status, 0);
+  assert.equal(hasMarker(good), true);
 });

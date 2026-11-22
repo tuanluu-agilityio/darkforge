@@ -87,6 +87,12 @@ export function loadConfig(root) {
     return { ok: false, error: `invalid JSON in ${file}: ${e.message}` };
   }
   if (!isObj(parsed)) return { ok: false, error: `${file} must contain a JSON object` };
+  return validateConfig(parsed);
+}
+
+/** Validate a parsed config object. Returns { ok, config } or { ok: false, error }. */
+export function validateConfig(parsed) {
+  if (!isObj(parsed)) return { ok: false, error: "config must be a JSON object" };
   if (parsed.schemaVersion !== 1) {
     return { ok: false, error: `unsupported schemaVersion ${JSON.stringify(parsed.schemaVersion)} (expected 1)` };
   }

@@ -3,7 +3,7 @@
 // checked before any push, PR or merge command, and any failing step stops the sequence.
 import { findProjectRoot, loadConfig } from "./config.mjs";
 import { run } from "./exec.mjs";
-import { gateFresh } from "./gate.mjs";
+import { DIRTY_PATHSPEC, gateFresh } from "./gate.mjs";
 import { lintMemory } from "./memory.mjs";
 import { writeState } from "./state.mjs";
 
@@ -69,7 +69,7 @@ export function startTask(root, id, slug) {
     const git = config(root);
     const branch = `task/${id}-${slug}`;
 
-    const status = step(root, "git", ["status", "--porcelain", "--", ".", ":(exclude).darkforge"]);
+    const status = step(root, "git", ["status", "--porcelain", "--", ...DIRTY_PATHSPEC]);
     if (status.stdout.trim()) throw new Stop(`working tree has uncommitted changes; commit or stash them first:\n${status.stdout.trimEnd()}`);
 
     if (git.remote) step(root, "git", ["fetch", "--prune", git.remote]);
@@ -169,13 +169,21 @@ export function mergeTask(root, id, { title } = {}) {
 
     if (!git.prFlow || !git.remote) {
       step(root, "git", ["switch", base]);
+      // With a remote, the next task branches from <remote>/<base>: sync before, push after.
+      if (git.remote) step(root, "git", ["pull", "--ff-only", git.remote, base]);
       try {
         step(root, "git", ["merge", "--no-ff", branch, "-m", `Merge ${branch}`]);
       } catch (e) {
         throw new Stop(`${e.message}\nrun "git merge --abort" to undo the partial merge`);
       }
       writeState(root, { task: null, phase: null, lastTask: id });
-      return { ok: true, message: `merged ${branch} into ${base} (local, no push)` };
+      if (!git.remote) return { ok: true, message: `merged ${branch} into ${base} (local, no remote)` };
+      try {
+        step(root, "git", ["push", git.remote, base]);
+      } catch (e) {
+        throw new Stop(`merged ${branch} into ${base} locally, but the push failed; run "git push ${git.remote} ${base}":\n${e.message}`);
+      }
+      return { ok: true, message: `merged ${branch} into ${base} (local) and pushed to ${git.remote}` };
     }
 
     const shortSha = head.slice(0, 7);

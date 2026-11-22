@@ -23,7 +23,8 @@ const HEAD = "0123456789abcdef0123456789abcdef01234567";
 const ACTIVE = "# Active\n\n## Where we are\nx\n\n## Next\ny\n\n## Waiting on owner\nnone\n";
 const MB_DIFF = "memory-bank/activeContext.md\nmemory-bank/progress.md\nsrc/a.rs\n";
 const URL = "https://github.com/o/r/pull/42\n";
-const STATUS = "git status --porcelain -- . :(exclude).darkforge";
+const STATUS =
+  "git status --porcelain -- . :(exclude).darkforge/state.json :(exclude).darkforge/gate.json :(exclude).darkforge/offsets :(exclude).darkforge/ledger.jsonl";
 
 /** Temp project (name contains spaces) with config, memory bank and a fresh gate record. */
 function project(git = {}, { gate = true, task = "7" } = {}) {
@@ -357,12 +358,39 @@ test("merge: failing cleanup after a successful merge reports it, state already 
 
 // ---------- merge: local ----------
 
-test("merge local (prFlow false): switch base, merge --no-ff, no push", () => {
+test("merge local (prFlow false, remote set): switch base, pull --ff-only, merge --no-ff, push base", () => {
   const root = project({ prFlow: false });
   const f = prFake();
   const r = mergeTask(root, "7", { title: "T" });
   assert.equal(r.ok, true, r.message);
-  assert.deepEqual(f.lines(), [...PRECHECKS, "git switch main", "git merge --no-ff task/7-add-thing -m Merge task/7-add-thing"]);
+  assert.deepEqual(f.lines(), [
+    ...PRECHECKS,
+    "git switch main",
+    "git pull --ff-only origin main",
+    "git merge --no-ff task/7-add-thing -m Merge task/7-add-thing",
+    "git push origin main",
+  ]);
+  assert.match(r.message, /pushed to origin/);
+  assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "7" });
+});
+
+test("merge local (prFlow false, remote set): failing pull stops before the merge", () => {
+  const root = project({ prFlow: false });
+  const f = prFake({ "git pull --ff-only origin main": { code: 1, stderr: "diverged" } });
+  const r = mergeTask(root, "7", { title: "T" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /diverged/);
+  assert.equal(f.lines().at(-1), "git pull --ff-only origin main");
+  assert.equal(readState(root).task, "7");
+});
+
+test("merge local (prFlow false, remote set): failing push after the merge says so, state already cleared", () => {
+  const root = project({ prFlow: false });
+  prFake({ "git push origin main": { code: 1, stderr: "rejected" } });
+  const r = mergeTask(root, "7", { title: "T" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /merged task\/7-add-thing into main locally, but the push failed; run "git push origin main"/);
+  assert.match(r.message, /rejected/);
   assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "7" });
 });
 
@@ -513,4 +541,26 @@ test("real git: start and local merge in a temp repo with a space in its path", 
   assert.equal(git(root, "rev-parse", "HEAD^2"), head);
   assert.ok(fs.existsSync(path.join(root, "feature.txt")));
   assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "3" });
+});
+
+test("real git: start refuses an uncommitted change to the tracked .darkforge/config.json, ignores local darkforge files", () => {
+  resetRunner();
+  const root = project({ remote: null, prFlow: false }, { gate: false, task: null });
+  fs.writeFileSync(path.join(root, ".gitignore"), ".darkforge/state.json\n.darkforge/gate.json\n.darkforge/offsets/\n.darkforge/ledger.jsonl\n");
+  git(root, "init", "-q");
+  git(root, "symbolic-ref", "HEAD", "refs/heads/main");
+  git(root, "config", "user.name", "t");
+  git(root, "config", "user.email", "t@example.com");
+  git(root, "config", "commit.gpgsign", "false");
+  git(root, "add", "-A");
+  git(root, "commit", "-q", "-m", "init");
+
+  fs.appendFileSync(path.join(root, ".darkforge", "config.json"), "\n");
+  const s = startTask(root, "4", "demo");
+  assert.equal(s.ok, false);
+  assert.match(s.message, /uncommitted changes[\s\S]*\.darkforge\/config\.json/);
+
+  git(root, "checkout", "--", ".darkforge/config.json");
+  fs.writeFileSync(path.join(root, ".darkforge", "gate.json"), "{}");
+  assert.equal(startTask(root, "4", "demo").ok, true);
 });

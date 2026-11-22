@@ -16,10 +16,22 @@ function currentHead(root) {
   return r.code === 0 && head ? head : null;
 }
 
-/** True when the working tree has uncommitted or untracked changes outside .darkforge/. */
+/**
+ * `git status` pathspec for dirty checks: the whole tree except darkforge's local, git-ignored
+ * files. The tracked .darkforge/config.json still counts.
+ */
+export const DIRTY_PATHSPEC = [
+  ".",
+  ":(exclude).darkforge/state.json",
+  ":(exclude).darkforge/gate.json",
+  ":(exclude).darkforge/offsets",
+  ":(exclude).darkforge/ledger.jsonl",
+];
+
+/** True when the working tree has uncommitted or untracked changes, or when `git status` fails. */
 function treeDirty(root) {
-  const r = run("git", ["status", "--porcelain", "--", ".", ":(exclude).darkforge"], { cwd: root });
-  return r.code === 0 && r.stdout.trim() !== "";
+  const r = run("git", ["status", "--porcelain", "--", ...DIRTY_PATHSPEC], { cwd: root });
+  return r.code !== 0 || r.stdout.trim() !== "";
 }
 
 function lines(text) {

@@ -85,17 +85,28 @@ test("sumUsage skips lines of the previous window's last message and returns las
   assert.equal(sumUsage("", 0, "m9").lastId, "m9");
 });
 
-test("sumUsage skips sidechain lines and reports the usage breakdown", () => {
+test("sumUsage counts sidechain lines (subagent transcripts mark every line) and reports the usage breakdown", () => {
   const text =
     JSON.stringify({ isSidechain: true, message: { usage: { input_tokens: 100 } } }) +
     "\n" +
     JSON.stringify({
+      isSidechain: true,
       message: { usage: { input_tokens: 1, output_tokens: 2, cache_creation_input_tokens: 3, cache_read_input_tokens: 4 } },
     }) +
     "\n";
   const r = sumUsage(text, 0);
-  assert.equal(r.tokens, 10);
-  assert.deepEqual(r.usage, { input: 1, output: 2, cacheWrite: 3, cacheRead: 4 });
+  assert.equal(r.tokens, 110);
+  assert.deepEqual(r.usage, { input: 101, output: 2, cacheWrite: 3, cacheRead: 4 });
+});
+
+test("SubagentStop on a real-shaped subagent transcript (isSidechain on every line) records non-zero tokens", () => {
+  const dir = tmpProject();
+  const r = runHook(dir, hookInput("subagent-stop.json", { cwd: dir, agent_transcript_path: path.join(transcripts, "subagent.jsonl") }));
+  assert.equal(r.status, 0);
+  const recs = records(dir);
+  assert.equal(recs.length, 1);
+  assert.ok(recs[0].tokens > 0, `expected non-zero tokens, got ${recs[0].tokens}`);
+  assert.equal(recs[0].tokens, 500);
 });
 
 test("sumUsage skips the <synthetic> model", () => {

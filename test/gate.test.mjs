@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { runGate, gateFresh } from "../scripts/lib/gate.mjs";
+import { setRunner, resetRunner } from "../scripts/lib/exec.mjs";
 import { main } from "../scripts/darkforge.mjs";
 
 const NODE = `"${process.execPath}"`;
@@ -113,7 +114,7 @@ function repo() {
   git(root, "config", "user.email", "t@example.com");
   git(root, "config", "commit.gpgsign", "false");
   fs.writeFileSync(path.join(root, "a.txt"), "1");
-  git(root, "add", "a.txt");
+  git(root, "add", "a.txt", ".darkforge/config.json");
   git(root, "commit", "-m", "one");
   return root;
 }
@@ -139,11 +140,45 @@ test("modify tracked file or add untracked file after gate: fresh false", () => 
   assert.equal(gateFresh(root), false);
 });
 
-test("changes inside .darkforge/ do not affect freshness", () => {
+test("changes to darkforge's local files (state, gate, offsets, ledger) do not affect freshness", () => {
   const root = repo();
   runGate(root);
   fs.writeFileSync(path.join(root, ".darkforge", "state.json"), "{}");
+  fs.mkdirSync(path.join(root, ".darkforge", "offsets"));
+  fs.writeFileSync(path.join(root, ".darkforge", "offsets", "abc.json"), "{}");
+  fs.writeFileSync(path.join(root, ".darkforge", "ledger.jsonl"), "{}\n");
   assert.equal(gateFresh(root), true);
+});
+
+test("an uncommitted change to the tracked .darkforge/config.json makes the tree dirty", () => {
+  const root = repo();
+  runGate(root);
+  assert.equal(gateFresh(root), true);
+  fs.appendFileSync(path.join(root, ".darkforge", "config.json"), "\n");
+  assert.equal(gateFresh(root), false);
+  const r = runGate(root);
+  assert.match(r.output, /gate: tree has uncommitted changes/);
+});
+
+test("a failing git status counts as a dirty tree", () => {
+  const root = project("gate-cmd");
+  const head = "0123456789abcdef0123456789abcdef01234567";
+  setRunner((cmd, args) => {
+    if (cmd === "gate-cmd") return { code: 0, stdout: "ALL CHECKS PASSED\n", stderr: "" };
+    if (cmd === "git" && args[0] === "rev-parse") return { code: 0, stdout: head + "\n", stderr: "" };
+    if (cmd === "git" && args[0] === "status") return { code: 128, stdout: "", stderr: "fatal: broken index" };
+    return { code: 1, stdout: "", stderr: "unexpected" };
+  });
+  try {
+    const r = runGate(root);
+    assert.equal(r.ok, true);
+    assert.match(r.output, /gate: tree has uncommitted changes/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".darkforge", "gate.json"), "utf8")).dirty, true);
+    fs.writeFileSync(path.join(root, ".darkforge", "gate.json"), JSON.stringify({ head, ok: true, dirty: false }));
+    assert.equal(gateFresh(root), false);
+  } finally {
+    resetRunner();
+  }
 });
 
 test("gate.json write failure returns ok:false", () => {

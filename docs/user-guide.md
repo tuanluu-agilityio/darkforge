@@ -8,10 +8,11 @@ The mechanical parts (branches, gate, merge, ledger, lint) are a Node CLI (`scri
 
 ## Requirements
 
-- Claude Code with plugin support and the `Agent` tool (the hooks match on that tool name).
+- Claude Code 2.1.330 or newer (tested), with plugin support and the `Agent` tool (the hooks match on that tool name). Older builds may not run exec-form hooks, and the guard then never runs.
 - Node.js 18 or newer on `PATH`. No `npm install`: the plugin has no dependencies.
 - `git`.
-- `gh`, authenticated, for the pull-request flow. Without it, set `git.prFlow` to `false` or `git.remote` to `null` and tasks merge locally.
+- `gh`, authenticated, for the pull-request flow. Without it, set `git.prFlow` to `false` or `git.remote` to `null` and tasks merge locally. With `prFlow: false` and a remote set, `task merge` pulls the base branch (`--ff-only`) before the merge and pushes it after, so the next task starts from the merged code; with `remote: null` nothing is pulled or pushed.
+- CI checks: in the pull-request flow, darkforge waits on the checks GitHub marks as required (branch protection). List the names you expect in `git.requiredChecks`: if GitHub reports no checks at all and that list is non-empty, the merge is refused. Mark these checks as required in branch protection.
 - Windows, macOS or Linux.
 
 ## Install
@@ -79,7 +80,7 @@ Token ledger (`hooks/ledger.mjs`, `darkforge ledger report`) is best effort:
 - `agent` is the SubagentStop `agent_type`; it is `null` when Claude Code sends an empty string (internal agents such as prompt suggestions in a session run without `--agent`).
 - The transcript is written asynchronously and may lag the conversation when Stop fires. Lines not yet written are counted at the next Stop, so the last turn of a session may be missed.
 - Lines that share a `message.id` (one API response logged per content block) count once. A response whose lines straddle two Stop (or two SubagentStop) events is counted at the first one; its later lines are skipped, so a few final output tokens may be missed.
-- Sidechain transcript lines are skipped.
+- Sidechain lines are counted: a subagent transcript (SubagentStop `agent_transcript_path`) marks every line `isSidechain: true`, and a main transcript has none, so nothing is counted twice.
 - `tokens` includes cache reads, which are billed far cheaper than other input; each record also stores `usage` (input, output, cache write, cache read), and the report prints the grand-total breakdown.
 - Read offsets are kept per transcript in `.darkforge/offsets/`, so a resumed subagent is counted only for its new lines.
 - Task and phase come from `.darkforge/state.json` at the moment the hook runs; set the phase with `darkforge ledger phase <implement|review|fix|orchestrator>`. A subagent that finishes after the phase changed is recorded under the new phase.
@@ -89,4 +90,5 @@ Token ledger (`hooks/ledger.mjs`, `darkforge ledger report`) is best effort:
 
 Process:
 
+- Memory lint rule 3 treats any mention of a `Q-NN` in `memory-bank/decisions.md` as its answer, so a question still listed under "## Waiting on owner" fails the lint: mention open questions in `decisions.md` only once answered.
 - The end-to-end run (init, plan-phase, next-task, phase-review in a live session) is manual; see [testing/e2e-checklist.md](testing/e2e-checklist.md). CI runs only the scripts and hooks.

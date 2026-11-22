@@ -22,8 +22,8 @@ Project config lives in `.darkforge/config.json`. Only `schemaVersion` is requir
 | `escalation.askOwnerAfterFixRounds` | number | `3` | Fix rounds before asking the owner. |
 | `git.baseBranch` | string | `"main"` | Branch tasks merge into. |
 | `git.remote` | string or null | `"origin"` | Remote name; `null` means local merges only. |
-| `git.prFlow` | boolean | `true` | Merge through pull requests. |
-| `git.requiredChecks` | array | `[]` | Check names that must pass before merge. |
+| `git.prFlow` | boolean | `true` | Merge through pull requests. `false` merges locally; with a remote set, the base branch is pulled (`--ff-only`) before and pushed after the merge. |
+| `git.requiredChecks` | array | `[]` | Names of the CI checks you expect. darkforge waits on checks GitHub marks as required (branch protection); if GitHub reports no checks at all and this list is non-empty, the merge is refused. Mark these checks as required in branch protection. |
 | `git.mergeMethod` | `"merge"` \| `"squash"` \| `"rebase"` | `"merge"` | How pull requests are merged. |
 | `git.autoMerge` | boolean | `false` | Merge automatically when checks pass. |
 | `superpowers` | `"auto"` \| `"off"` | `"auto"` | Use the superpowers plugin when installed, or never. |

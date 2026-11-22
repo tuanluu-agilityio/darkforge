@@ -30,7 +30,8 @@ function parseLine(line) {
  *   is still being written and is left for the next call).
  * - Lines sharing a `message.id` are one API response logged per content block: only the last
  *   of them counts. Lines whose id is `skipId` (the last message of the previous window, already
- *   counted) are skipped. Sidechain lines are skipped.
+ *   counted) are skipped. Sidechain lines count: a subagent transcript marks every line
+ *   `isSidechain: true`, and a main transcript has none.
  * - `model` is the `message.model` of the last counted line that has one (ignoring
  *   "<synthetic>"), else null. `lastId` is the id of the last line that has one (`skipId` when
  *   the window has none).
@@ -50,7 +51,7 @@ export function sumUsage(jsonlText, fromLine = 0, skipId = null) {
   let lastId = skipId;
   for (let i = Math.max(0, fromLine); i < lines; i++) {
     const entry = parseLine(parts[i]);
-    if (!entry || entry.isSidechain === true) continue;
+    if (!entry) continue;
     const msg = entry.message;
     if (!isObj(msg)) continue;
     const id = typeof msg.id === "string" && msg.id !== "" ? msg.id : null;

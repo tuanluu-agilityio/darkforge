@@ -1,0 +1,12 @@
+{
+  "name": "darkforge",
+  "description": "Marketplace for the darkforge plugin",
+  "owner": { "name": "Tuan Luu" },
+  "plugins": [
+    {
+      "name": "darkforge",
+      "source": "./",
+      "description": "Spec-driven, token-economical project workflow for Claude Code."
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{"isSidechain":true,"type":"user","message":{"role":"user","content":"task"}}
+{"isSidechain":true,"type":"assistant","message":{"id":"msg_a","model":"claude-sonnet-4-6","role":"assistant","usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":50,"cache_read_input_tokens":100}}}
+{"isSidechain":true,"type":"assistant","message":{"id":"msg_b","model":"claude-sonnet-4-6","role":"assistant","usage":{"input_tokens":50,"output_tokens":50,"cache_read_input_tokens":100}}}
+{"isSidechain":true,"type":"assistant","message":{"id":"msg_c","model":"<synthetic>","role":"assistant","usage":{"input_tokens":0,"output_tokens":0}}}

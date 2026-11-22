@@ -1,0 +1,10 @@
+{
+  "name": "darkforge",
+  "version": "0.1.0",
+  "description": "Spec-driven, token-economical project workflow for Claude Code.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test" }
+}

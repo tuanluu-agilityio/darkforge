@@ -14,7 +14,7 @@ Input: if `superpowers` in the config is `auto` and `docs/superpowers/plans/` ha
 
 ## 2. Branch
 Planning is merged like a task, so the plan reaches the base branch that task branches start from.
-- If the superpowers plan file is untracked or uncommitted (`git status --porcelain -- <file>` prints a line): `git stash push -u -- <file>`, `df task start P<N> plan`, `git stash pop`. It is committed on the plan branch in step 6.
+- If `docs/superpowers/` has untracked or uncommitted files (`git status --porcelain -- docs/superpowers` prints a line, e.g. the spec and the plan): `git stash push -u -- docs/superpowers`, `df task start P<N> plan`, `git stash pop`. They are committed on the plan branch in step 6.
 - Otherwise: `df task start P<N> plan`.
 Then: with a superpowers plan, read its tasks and acceptance (do not copy its text); without one, ask the owner for the requirements and load the `grill` skill in requirements mode.
 
@@ -35,7 +35,7 @@ Load `task-package-writing`; write one package per task in `docs/tasks/`.
 - `memory-bank/decisions.md`: one line per new decision.
 - `memory-bank/progress.md`: row `| P<N> | task/P<N>-plan | orchestrator | - | done | - |`.
 - `memory-bank/activeContext.md`: `## Where we are` = phase N planned; `## Next` = the first task with no open dependency; keep open `Q-NN` rows.
-- Stage only `git add docs/plans docs/tasks memory-bank/` (plus the superpowers plan file, if used); never `git add -A` or `.`. Commit `docs: phase N plan`. `df memory lint` must print `memory: ok`.
+- Stage only `git add docs/plans docs/tasks memory-bank/` (plus `docs/superpowers/` with the spec and plan, if used); never `git add -A` or `.`. Commit `docs: phase N plan`. `df memory lint` must print `memory: ok`.
 - `df gate`, `df ledger phase orchestrator`, `df task merge P<N> --title "Phase N plan"`. If a command refuses, fix what it names and re-run.
 
 Tell the owner, briefly: the task table (id, title, risk, models), open questions, and `/darkforge:next-task` to start.

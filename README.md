@@ -23,7 +23,7 @@ No npm dependencies, no network access except `git` and `gh`, no telemetry.
 
 ## Requirements
 
-- Claude Code with plugin support
+- Claude Code 2.1.330 or newer (tested), with plugin support; older builds may not run exec-form hooks, and the guard then never runs
 - Node.js 18 or newer
 - `git`; `gh` for the pull-request flow
 - Windows, macOS or Linux

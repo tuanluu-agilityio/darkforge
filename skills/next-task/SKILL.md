@@ -10,6 +10,7 @@ You orchestrate. You never write task code or tests yourself. `df <args>` means 
 
 ## 1. Pick
 Read only `memory-bank/activeContext.md` and `memory-bank/progress.md`. The task is the one under `## Next`. If `## Next` is planning or `phase-review`, or the current task id starts with `P`, tell the owner to run `/darkforge:plan-phase` or `/darkforge:phase-review` and stop. Stop and ask the owner if a `## Waiting on owner` question blocks it or `docs/tasks/NNN-*.md` does not exist. From the package read only its header line (agent, model, branch, reviewer, risk); the agents read the rest.
+If the previous task's row says `auto-merge pending`: `gh pr list --state merged --head task/<id>-<slug> --json number`; if it prints `[]`, tell the owner its PR has not merged and stop; else set that row to `done` in step 6.
 
 Resuming (the session brief names a current task): stay on its branch, skip `task start`, and continue from the first step not yet done (check `git log` on the branch).
 
@@ -32,7 +33,7 @@ First report line `CHANGES REQUIRED` with a `blocking` defect:
 
 ## 6. Memory bank
 After `APPROVED`, edit:
-- `progress.md`: row `| NNN | task/NNN-<slug> | <agent> | <model(s)> | done | <task total from df ledger report> |`.
+- `progress.md`: row `| NNN | task/NNN-<slug> | <agent> | <model(s)> | done | <task total from df ledger report> |` (status `auto-merge pending` instead of `done` when `git.autoMerge` is true).
 - `activeContext.md`: one line under `## Where we are`; under `## Next` the next task from the phase plan whose dependencies are merged, or `phase-review`; drop answered `Q-NN` rows. Keep it under 60 lines.
 - `decisions.md`: one line per decision the reports made; `backlog.md`: should-fix items and follow-ups.
 

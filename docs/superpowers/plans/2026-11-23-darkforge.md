@@ -21,13 +21,12 @@
 - Hooks never change a tool call silently: they allow, or deny with an actionable reason.
 - Hooks are no-ops (exit 0, no output) when the project has no `.darkforge/config.json` or when the config is invalid (they print one warning line to stderr in the invalid case).
 - Licence MIT. Version 0.1.0.
-- Never use the model `fable` for any subagent while building this plugin (owner rule).
 
 ## Review Focus
 
 1. A project with no `.darkforge/config.json` (any other repo the user opens): every hook exits 0 silently. Test in Task 3 and Task 6.
 2. A malformed or partial config (missing fields, wrong types, `schemaVersion` ≠ 1): `loadConfig` fills defaults for missing fields and returns a clear error for wrong types; hooks fail open with a stderr warning, CLI commands fail closed with exit 1. Test in Task 2.
-3. Paths with spaces (e.g. `D:\2026 - Tuan\x`): CLI, gate and hooks work. Test in Task 5 (gate command with a space in cwd) and Task 3 (hook cwd with space).
+3. Paths with spaces (e.g. `C:\Users\Jane Doe\projects\x`): CLI, gate and hooks work. Test in Task 5 (gate command with a space in cwd) and Task 3 (hook cwd with space).
 4. Re-running `init apply` on a project already initialised or with an existing `CLAUDE.md`/gate script: only the marked block and config change; nothing else is overwritten. Test in Task 8.
 5. Agent calls from other plugins (e.g. `superpowers:*` or built-in `general-purpose`) without `model`: allowed; with a banned model: denied. Test in Task 3.
 
@@ -256,5 +255,5 @@ Exact defaults:
 
 **Files:** Create `docs/testing/2026-MM-DD-e2e-<os>.md`.
 
-- [ ] **Step 1:** Install the plugin from the local path into a scratch project (outside dark-clipboard), run `init` → `plan-phase` (tiny phase, two tasks) → `next-task` ×2 → `phase-review`, once with superpowers enabled and once disabled.
+- [ ] **Step 1:** Install the plugin from the local path into a scratch project, run `init` → `plan-phase` (tiny phase, two tasks) → `next-task` ×2 → `phase-review`, once with superpowers enabled and once disabled.
 - [ ] **Step 2:** Record date, OS, Node, Claude Code version, the ledger report, every deviation. Fix defects as new tasks. Commit `docs: e2e run`.

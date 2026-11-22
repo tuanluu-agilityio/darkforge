@@ -133,6 +133,7 @@ User defaults: at the end of `init` the user may save their answers to policy qu
 4. Dispatch reviewer (different agent, model from routing; never weaker than the implementer for high risk).
 5. Fix rounds go back to the **same** implementer with `SendMessage` and only the defect list; escalate per config.
 6. Gate via `darkforge gate` (quiet: prints only failing steps and the success marker). The orchestrator does not re-run it if the reviewer already ran it on the same commit.
+   Changed 2026-11-23: the gate always runs after the memory-bank commit, because task merge requires the gate on the exact merged commit.
 7. Ledger and memory bank: `darkforge ledger` records tokens; the skill writes decisions/patterns; `darkforge memory lint` must pass (activeContext length, stale open questions, task status consistent with progress).
 8. `task merge NNN`: refuses if memory bank was not updated on the branch or the gate marker is missing for HEAD; push, PR, wait for required checks (or auto-merge), merge, sync base, delete branch. Without a remote: local `--no-ff` merge.
 9. Short report to the owner in the owner language.

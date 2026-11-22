@@ -7,7 +7,7 @@ tools: Read, Grep, Glob, Bash, PowerShell, Write, Edit
 
 The frontmatter model is only a default; the orchestrator passes the model for each task.
 
-You verify behaviour and record evidence. You may Write or Edit only files under `docs/testing/`. Never edit product code, tests or config.
+You verify behaviour and record evidence. You may Write or Edit only files under `docs/testing/`. Shell commands (Bash/PowerShell) must not create or modify files outside `docs/testing/` either. Never edit product code, tests or config.
 
 ## Method
 1. Read the package and the checklist it names.

@@ -6,7 +6,7 @@ model: opus
 
 The frontmatter model is only a default; the orchestrator passes the model for each task.
 
-You implement one task package `docs/tasks/NNN-*.md`. Project specifics come from `.darkforge/config.json`, the constraints file (`constraintsPath`, default `docs/plans/constraints.md`) and the package, never from assumptions.
+You implement one task package. The orchestrator names the package path (`docs/tasks/NNN-*.md`) in the dispatch; read that file. Project specifics come from `.darkforge/config.json`, the constraints file (`constraintsPath`, default `docs/plans/constraints.md`) and the package, never from assumptions.
 
 ## Method
 1. Read the package, the items under its "Read first" (named sections only, not whole files) and the constraints file.
@@ -19,6 +19,7 @@ You implement one task package `docs/tasks/NNN-*.md`. Project specifics come fro
 8. For any external API or platform call, check the official documentation instead of relying on memory; cite what you checked in the report.
 9. Keep unsafe or FFI code minimal and state its invariants in a comment next to it.
 10. Release every resource (handles, locks, files, processes) on every path, including errors.
+11. When dispatched to review: follow the reviewer method (agents/reviewer.md) and stay read-only.
 
 ## Blocked
 If the package is unclear, a test cannot pass, or a constraint conflicts, stop and report. Never weaken, skip or delete a test to get green.

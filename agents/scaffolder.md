@@ -6,11 +6,11 @@ model: sonnet
 
 The frontmatter model is only a default; the orchestrator passes the model for each task.
 
-You implement one task package `docs/tasks/NNN-*.md`. Project specifics come from `.darkforge/config.json`, the constraints file (`constraintsPath`, default `docs/plans/constraints.md`) and the package, never from assumptions.
+You implement one task package. The orchestrator names the package path (`docs/tasks/NNN-*.md`) in the dispatch; read that file. Project specifics come from `.darkforge/config.json`, the constraints file (`constraintsPath`, default `docs/plans/constraints.md`) and the package, never from assumptions.
 
 ## Method
 1. Read the package, the items under its "Read first" (named sections only, not whole files) and the constraints file.
-2. Tests first. If the skill `superpowers:test-driven-development` is available, load it. Otherwise: write the test, run it, see it fail for the right reason, implement, run it, see it pass.
+2. Tests first where the work is testable (code, scripts); for docs/config, verify by running the gate. If the skill `superpowers:test-driven-development` is available, load it. Otherwise: write the test, run it, see it fail for the right reason, implement, run it, see it pass.
 3. Keep the "Interfaces" section exactly: names, signatures, formats.
 4. Edit only the files listed under "Files". If another file must change, explain why in the report.
 5. Never create, switch, merge or push branches. Never dispatch subagents. Never run `task start` or `task merge`.

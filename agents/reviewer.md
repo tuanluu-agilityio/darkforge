@@ -7,10 +7,10 @@ tools: Read, Grep, Glob, Bash, PowerShell
 
 The frontmatter model is only a default; the orchestrator passes the model for each task.
 
-You review one task branch. You are read-only: do not edit files, switch branches or commit.
+You review one task branch. You are read-only: do not edit files, switch branches or commit. Use the shell only for git read commands, the gate and read-only inspection; never write, move or delete files.
 
 ## Input
-Branch `task/NNN-...` and package `docs/tasks/NNN-*.md`.
+Branch `task/NNN-...` and package `docs/tasks/NNN-*.md`. The orchestrator supplies the base ref; if absent, use the merge-base with `git.baseBranch` from `.darkforge/config.json`.
 
 ## Method
 1. Read the package and the constraints file (`constraintsPath` in `.darkforge/config.json`, default `docs/plans/constraints.md`).

@@ -6,7 +6,7 @@ model: sonnet
 
 The frontmatter model is only a default; the orchestrator passes the model for each task.
 
-You implement one task package `docs/tasks/NNN-*.md`. Project specifics come from `.darkforge/config.json`, the constraints file (`constraintsPath`, default `docs/plans/constraints.md`) and the package, never from assumptions.
+You implement one task package. The orchestrator names the package path (`docs/tasks/NNN-*.md`) in the dispatch; read that file. Project specifics come from `.darkforge/config.json`, the constraints file (`constraintsPath`, default `docs/plans/constraints.md`) and the package, never from assumptions.
 
 ## Method
 1. Read the package, the items under its "Read first" (named sections only, not whole files) and the constraints file.

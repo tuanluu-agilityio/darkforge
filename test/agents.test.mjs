@@ -36,7 +36,7 @@ for (const n of NAMES) {
     for (const w of ['fable', 'dark clipboard', 'darkshot', 'clipboard', 'cargo']) {
       assert.ok(!t.includes(w), `${n} contains "${w}"`);
     }
-    assert.ok(Buffer.byteLength(t) <= 2800, `${n} is ${Buffer.byteLength(t)} bytes`);
+    assert.ok(Buffer.byteLength(t) <= 2560, `${n} is ${Buffer.byteLength(t)} bytes`);
   });
 }
 

@@ -10,7 +10,20 @@ import { writeState } from "./state.mjs";
 const ID_RE = /^[A-Za-z0-9]+$/;
 const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const MEMORY_FILES = ["memory-bank/progress.md", "memory-bank/activeContext.md"];
-const NO_CHECKS_RE = /no required checks|no checks reported/i;
+const NO_REQUIRED_RE = /no required checks/i;
+const NO_CHECKS_RE = /no checks reported/i;
+const CHECK_RETRIES = 3;
+const CHECK_RETRY_MS = 10_000;
+
+const realSleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+let sleep = realSleep;
+/** Replace the synchronous sleep used between CI-check retries (tests). */
+export function setSleep(fn) {
+  sleep = fn;
+}
+export function resetSleep() {
+  sleep = realSleep;
+}
 
 class Stop extends Error {}
 
@@ -30,7 +43,16 @@ function step(root, cmd, args) {
 function config(root) {
   const loaded = loadConfig(root);
   if (!loaded.ok) throw new Stop(loaded.error);
-  return loaded.config.git;
+  const git = loaded.config.git;
+  // These values become git/gh arguments: refuse anything git could read as an option.
+  const bad = (v) => typeof v !== "string" || v === "" || v.startsWith("-");
+  if (bad(git.baseBranch)) {
+    throw new Stop(`invalid git.baseBranch "${git.baseBranch}" in .darkforge/config.json: must be non-empty and not start with "-"`);
+  }
+  if (git.remote !== null && bad(git.remote)) {
+    throw new Stop(`invalid git.remote "${git.remote}" in .darkforge/config.json: must be null, or non-empty and not start with "-"`);
+  }
+  return git;
 }
 
 function validId(id) {
@@ -84,7 +106,7 @@ function prNumber(r) {
   return null;
 }
 
-/** Refuse unless all merge preconditions hold. Returns the current branch name. */
+/** Refuse unless all merge preconditions hold. Returns the branch name and the gated full SHA. */
 function checkPreconditions(root, git, id) {
   const branch = step(root, "git", ["branch", "--show-current"]).stdout.trim();
   if (!branch.startsWith(`task/${id}-`) || branch.length === `task/${id}-`.length) {
@@ -93,6 +115,7 @@ function checkPreconditions(root, git, id) {
   if (!gateFresh(root)) {
     throw new Stop("refused: gate has not passed on this commit with a clean tree; run `darkforge gate` after committing");
   }
+  const head = step(root, "git", ["rev-parse", "HEAD"]).stdout.trim();
   const base = git.remote ? `${git.remote}/${git.baseBranch}` : git.baseBranch;
   const changed = step(root, "git", ["diff", "--name-only", `${base}...HEAD`]).stdout.split(/\r?\n/).map((l) => l.trim());
   const missing = MEMORY_FILES.filter((f) => !changed.includes(f));
@@ -101,7 +124,34 @@ function checkPreconditions(root, git, id) {
   }
   const lint = lintMemory(root);
   if (!lint.ok) throw new Stop(`refused: memory lint failed:\n${lint.problems.join("\n")}`);
-  return branch;
+  return { branch, head };
+}
+
+/**
+ * Wait for the PR's required checks. "no required checks" on stderr: the repo requires none, continue.
+ * "no checks reported" right after PR creation can mean CI has not started yet: retry; if it never
+ * reports, continue only when config.git.requiredChecks is empty. Any other failure stops.
+ */
+function waitForChecks(root, git, n) {
+  for (let attempt = 0; ; attempt++) {
+    const r = run("gh", ["pr", "checks", n, "--watch", "--required"], { cwd: root });
+    if (r.code === 0) return;
+    const err = r.stderr ?? "";
+    if (NO_REQUIRED_RE.test(err)) return;
+    if (!NO_CHECKS_RE.test(err)) {
+      throw new Stop(`checks did not pass for PR #${n}; not merged:\n${output(r) || `exit ${r.code}`}`);
+    }
+    if (attempt < CHECK_RETRIES) {
+      sleep(CHECK_RETRY_MS);
+      continue;
+    }
+    if (git.requiredChecks.length) {
+      throw new Stop(
+        `no checks reported for PR #${n} after ${CHECK_RETRIES} retries; expected required checks: ${git.requiredChecks.join(", ")}; not merged`,
+      );
+    }
+    return;
+  }
 }
 
 /** Merge the current task branch into the base branch (PR flow or local), then clear the task state. */
@@ -111,17 +161,21 @@ export function mergeTask(root, id, { title } = {}) {
     validId(id);
     if (typeof title !== "string" || !title.trim()) throw new Stop("a non-empty --title is required");
     const git = config(root);
-    const branch = checkPreconditions(root, git, id);
+    const { branch, head } = checkPreconditions(root, git, id);
     const base = git.baseBranch;
 
     if (!git.prFlow || !git.remote) {
       step(root, "git", ["switch", base]);
-      step(root, "git", ["merge", "--no-ff", branch, "-m", `Merge ${branch}`]);
+      try {
+        step(root, "git", ["merge", "--no-ff", branch, "-m", `Merge ${branch}`]);
+      } catch (e) {
+        throw new Stop(`${e.message}\nrun "git merge --abort" to undo the partial merge`);
+      }
       writeState(root, { task: null, phase: null });
       return { ok: true, message: `merged ${branch} into ${base} (local, no push)` };
     }
 
-    const shortSha = step(root, "git", ["rev-parse", "--short", "HEAD"]).stdout.trim();
+    const shortSha = head.slice(0, 7);
     step(root, "git", ["push", git.remote, branch]);
     const created = run("gh", ["pr", "create", "--base", base, "--head", branch, "--title", title.trim(), "--body", prBody(id, title.trim(), shortSha)], { cwd: root });
     const n = prNumber(created);
@@ -130,18 +184,17 @@ export function mergeTask(root, id, { title } = {}) {
       throw new Stop(`${what}:\n${output(created) || `exit ${created.code}`}`);
     }
     const method = `--${git.mergeMethod}`;
+    // Pin the merge to the gated commit: GitHub refuses it if the branch head moved after the gate.
+    const pin = ["--match-head-commit", head];
 
     if (git.autoMerge) {
-      step(root, "gh", ["pr", "merge", n, method, "--delete-branch", "--auto"]);
+      step(root, "gh", ["pr", "merge", n, method, "--delete-branch", "--auto", ...pin]);
       writeState(root, { task: null, phase: null });
       return { ok: true, message: `auto-merge enabled for PR #${n}; it merges when required checks pass` };
     }
 
-    const checks = run("gh", ["pr", "checks", n, "--watch", "--required"], { cwd: root });
-    if (checks.code !== 0 && !NO_CHECKS_RE.test(output(checks))) {
-      throw new Stop(`checks did not pass for PR #${n}; not merged:\n${output(checks) || `exit ${checks.code}`}`);
-    }
-    step(root, "gh", ["pr", "merge", n, method, "--delete-branch"]);
+    waitForChecks(root, git, n);
+    step(root, "gh", ["pr", "merge", n, method, "--delete-branch", ...pin]);
     merged = n;
     writeState(root, { task: null, phase: null });
 

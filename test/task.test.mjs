@@ -1,4 +1,4 @@
-import { test, afterEach } from "node:test";
+import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -6,10 +6,18 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { setRunner, resetRunner } from "../scripts/lib/exec.mjs";
 import { readState, writeState } from "../scripts/lib/state.mjs";
-import { startTask, mergeTask } from "../scripts/lib/task.mjs";
+import { startTask, mergeTask, setSleep, resetSleep } from "../scripts/lib/task.mjs";
 import { main } from "../scripts/darkforge.mjs";
 
-afterEach(() => resetRunner());
+let sleeps = [];
+beforeEach(() => {
+  sleeps = [];
+  setSleep((ms) => sleeps.push(ms));
+});
+afterEach(() => {
+  resetRunner();
+  resetSleep();
+});
 
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
 const ACTIVE = "# Active\n\n## Where we are\nx\n\n## Next\ny\n\n## Waiting on owner\nnone\n";
@@ -40,7 +48,6 @@ function fake(responses = {}) {
     const key = [cmd, ...args].join(" ");
     const base = {
       "git rev-parse HEAD": { code: 0, stdout: HEAD + "\n", stderr: "" },
-      "git rev-parse --short HEAD": { code: 0, stdout: "0123456\n", stderr: "" },
       "git branch --show-current": { code: 0, stdout: "task/7-add-thing\n", stderr: "" },
     };
     const r = Object.hasOwn(responses, key) ? responses[key] : base[key];
@@ -58,6 +65,7 @@ const PRECHECKS = [
   "git branch --show-current",
   "git rev-parse HEAD",
   STATUS,
+  "git rev-parse HEAD",
   "git diff --name-only origin/main...HEAD",
 ];
 const noPushOrGh = (lines) => lines.every((l) => !l.startsWith("gh ") && !l.startsWith("git push") && !l.startsWith("git merge") && !l.startsWith("git switch"));
@@ -141,10 +149,9 @@ test("merge with PR + autoMerge: push, create, merge --auto, stop; state cleared
   assert.equal(r.ok, true, r.message);
   assert.deepEqual(f.lines(), [
     ...PRECHECKS,
-    "git rev-parse --short HEAD",
     "git push origin task/7-add-thing",
     "gh pr create --base main --head task/7-add-thing --title Add thing --body <body>",
-    "gh pr merge 42 --squash --delete-branch --auto",
+    `gh pr merge 42 --squash --delete-branch --auto --match-head-commit ${HEAD}`,
   ]);
   assert.match(r.message, /auto-merge enabled for PR #42; it merges when required checks pass/);
   assert.deepEqual(readState(root), { task: null, phase: null });
@@ -161,9 +168,8 @@ function setRunnerFor(f, pick) {
   const calls = f.calls;
   const table = {
     "git rev-parse HEAD": { stdout: HEAD + "\n" },
-    "git rev-parse --short HEAD": { stdout: "0123456\n" },
     "git branch --show-current": { stdout: "task/7-add-thing\n" },
-    [PRECHECKS[3]]: { stdout: MB_DIFF },
+    [PRECHECKS.at(-1)]: { stdout: MB_DIFF },
     ...(f.extra ?? {}),
   };
   setRunner((cmd, args) => {
@@ -189,11 +195,10 @@ test("merge with PR + watch: checks, merge, switch, pull, delete local branch", 
   assert.equal(r.ok, true, r.message);
   assert.deepEqual(f.lines(), [
     ...PRECHECKS,
-    "git rev-parse --short HEAD",
     "git push origin task/7-add-thing",
     "gh pr create --base main --head task/7-add-thing --title Add thing --body <body>",
     "gh pr checks 42 --watch --required",
-    "gh pr merge 42 --merge --delete-branch",
+    `gh pr merge 42 --merge --delete-branch --match-head-commit ${HEAD}`,
     "git switch main",
     "git pull --ff-only origin main",
     "git branch --list task/7-add-thing",
@@ -209,12 +214,86 @@ test("merge with PR + watch: local branch already deleted by gh -> skip branch -
   assert.deepEqual(f.lines().slice(-3), ["git switch main", "git pull --ff-only origin main", "git branch --list task/7-add-thing"]);
 });
 
-test("merge with PR + watch: 'no required checks' / 'no checks reported' -> continue to merge", () => {
-  for (const msg of ["no required checks reported on the 'task/7-add-thing' branch", "no checks reported on the 'x' branch"]) {
-    const root = project({});
-    const f = prFake({ "gh pr checks 42 --watch --required": { code: 1, stderr: msg } });
-    assert.equal(mergeTask(root, "7", { title: "T" }).ok, true);
-    assert.ok(f.lines().includes("gh pr merge 42 --merge --delete-branch"));
+const CHECKS = "gh pr checks 42 --watch --required";
+const MERGE = `gh pr merge 42 --merge --delete-branch --match-head-commit ${HEAD}`;
+const NO_CHECKS = { code: 1, stderr: "no checks reported on the 'task/7-add-thing' branch" };
+/** Responder returning `seq[i]` on the i-th call, the last entry afterwards. */
+const sequence = (...seq) => {
+  let i = 0;
+  return () => seq[Math.min(i++, seq.length - 1)];
+};
+
+test("merge with PR + watch: 'no required checks' (stderr) -> merge at once, no retry", () => {
+  const root = project({ requiredChecks: ["ci"] });
+  const f = prFake({ [CHECKS]: { code: 1, stderr: "no required checks reported on the 'task/7-add-thing' branch" } });
+  assert.equal(mergeTask(root, "7", { title: "T" }).ok, true);
+  assert.equal(f.lines().filter((l) => l === CHECKS).length, 1);
+  assert.deepEqual(sleeps, []);
+  assert.ok(f.lines().includes(MERGE));
+});
+
+test("merge with PR + watch: 'no checks reported' then checks pass -> retry, merge", () => {
+  const root = project({ requiredChecks: ["ci"] });
+  const f = prFake({ [CHECKS]: sequence(NO_CHECKS, NO_CHECKS, { code: 0, stdout: "ci pass" }) });
+  assert.equal(mergeTask(root, "7", { title: "T" }).ok, true);
+  assert.equal(f.lines().filter((l) => l === CHECKS).length, 3);
+  assert.deepEqual(sleeps, [10000, 10000]);
+  assert.equal(f.lines()[f.lines().indexOf(MERGE) - 1], CHECKS);
+});
+
+test("merge with PR + watch: 'no checks reported' after all retries, requiredChecks empty -> merge", () => {
+  const root = project({});
+  const f = prFake({ [CHECKS]: NO_CHECKS });
+  assert.equal(mergeTask(root, "7", { title: "T" }).ok, true);
+  assert.equal(f.lines().filter((l) => l === CHECKS).length, 4);
+  assert.deepEqual(sleeps, [10000, 10000, 10000]);
+  assert.ok(f.lines().includes(MERGE));
+});
+
+test("merge with PR + watch: 'no checks reported' after all retries, requiredChecks set -> refuse, no merge", () => {
+  const root = project({ requiredChecks: ["ci", "lint"] });
+  const f = prFake({ [CHECKS]: NO_CHECKS });
+  const r = mergeTask(root, "7", { title: "T" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /no checks reported for PR #42/);
+  assert.match(r.message, /ci, lint/);
+  assert.equal(f.lines().filter((l) => l === CHECKS).length, 4);
+  assert.equal(f.lines().at(-1), CHECKS);
+  assert.ok(!f.lines().some((l) => l.startsWith("gh pr merge")));
+  assert.equal(readState(root).task, "7");
+});
+
+test("merge with PR + watch: 'no checks' text on stdout only is a failure", () => {
+  const root = project({});
+  const f = prFake({ [CHECKS]: { code: 1, stdout: "lint  fail  no checks reported by sub-job", stderr: "" } });
+  const r = mergeTask(root, "7", { title: "T" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /checks did not pass/);
+  assert.deepEqual(sleeps, []);
+  assert.ok(!f.lines().some((l) => l.startsWith("gh pr merge")));
+});
+
+test("merge local: failing git merge adds the abort hint", () => {
+  const root = project({ prFlow: false });
+  prFake({ "git merge --no-ff task/7-add-thing -m Merge task/7-add-thing": { code: 1, stdout: "CONFLICT (content): a.rs" } });
+  const r = mergeTask(root, "7", { title: "T" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /CONFLICT/);
+  assert.match(r.message, /run "git merge --abort" to undo the partial merge/);
+  assert.equal(readState(root).task, "7");
+});
+
+test("start and merge refuse a remote or baseBranch that is empty or starts with '-'", () => {
+  for (const git of [{ remote: "--upload-pack=x" }, { remote: "" }, { baseBranch: "-x" }, { baseBranch: "" }]) {
+    const root = project(git);
+    const f = fake();
+    const s = startTask(root, "7", "a");
+    const m = mergeTask(root, "7", { title: "T" });
+    for (const r of [s, m]) {
+      assert.equal(r.ok, false, JSON.stringify(git));
+      assert.match(r.message, /^invalid git\.(remote|baseBranch) .*must .*not start with "-"/);
+    }
+    assert.deepEqual(f.calls, [], JSON.stringify(git));
   }
 });
 
@@ -255,7 +334,7 @@ test("merge: PR already exists -> reuse its number", () => {
     "gh pr create": { code: 1, stderr: 'a pull request for branch "task/7-add-thing" into branch "main" already exists:\nhttps://github.com/o/r/pull/9\n' },
   });
   assert.equal(mergeTask(root, "7", { title: "T" }).ok, true);
-  assert.equal(f.lines().at(-1), "gh pr merge 9 --merge --delete-branch --auto");
+  assert.equal(f.lines().at(-1), `gh pr merge 9 --merge --delete-branch --auto --match-head-commit ${HEAD}`);
 });
 
 test("merge: failing cleanup after a successful merge reports it, state already cleared", () => {
@@ -284,7 +363,7 @@ test("merge local (remote null): diff against local base", () => {
   const f = fake({ "git diff --name-only dev...HEAD": { stdout: MB_DIFF } });
   assert.equal(mergeTask(root, "7", { title: "T" }).ok, true);
   assert.deepEqual(f.lines(), [
-    ...PRECHECKS.slice(0, 3),
+    ...PRECHECKS.slice(0, 4),
     "git diff --name-only dev...HEAD",
     "git switch dev",
     "git merge --no-ff task/7-add-thing -m Merge task/7-add-thing",
@@ -311,7 +390,7 @@ test("merge refused: stale gate (other HEAD, no gate.json, dirty tree)", () => {
     [project({}), { [STATUS]: { stdout: "?? new.txt\n" } }],
   ];
   for (const [root, resp] of cases) {
-    const f = fake({ [PRECHECKS[3]]: { stdout: MB_DIFF }, ...resp });
+    const f = fake({ [PRECHECKS.at(-1)]: { stdout: MB_DIFF }, ...resp });
     const r = mergeTask(root, "7", { title: "T" });
     assert.equal(r.ok, false);
     assert.match(r.message, /gate has not passed on this commit/);
@@ -324,7 +403,7 @@ test("merge refused: stale gate (other HEAD, no gate.json, dirty tree)", () => {
 test("merge refused: memory bank not changed on the branch", () => {
   for (const diff of ["src/a.rs\n", "memory-bank/progress.md\n", "memory-bank/activeContext.md\n", ""]) {
     const root = project({});
-    const f = fake({ [PRECHECKS[3]]: { stdout: diff } });
+    const f = fake({ [PRECHECKS.at(-1)]: { stdout: diff } });
     const r = mergeTask(root, "7", { title: "T" });
     assert.equal(r.ok, false);
     assert.match(r.message, /memory bank not updated/);
@@ -334,7 +413,7 @@ test("merge refused: memory bank not changed on the branch", () => {
 
 test("merge refused: diff command fails", () => {
   const root = project({});
-  const f = fake({ [PRECHECKS[3]]: { code: 128, stderr: "fatal: bad revision" } });
+  const f = fake({ [PRECHECKS.at(-1)]: { code: 128, stderr: "fatal: bad revision" } });
   const r = mergeTask(root, "7", { title: "T" });
   assert.equal(r.ok, false);
   assert.match(r.message, /bad revision/);
@@ -344,7 +423,7 @@ test("merge refused: diff command fails", () => {
 test("merge refused: memory lint fails", () => {
   const root = project({});
   fs.writeFileSync(path.join(root, "memory-bank", "activeContext.md"), "# nothing\n");
-  const f = fake({ [PRECHECKS[3]]: { stdout: MB_DIFF } });
+  const f = fake({ [PRECHECKS.at(-1)]: { stdout: MB_DIFF } });
   const r = mergeTask(root, "7", { title: "T" });
   assert.equal(r.ok, false);
   assert.match(r.message, /memory lint failed/);

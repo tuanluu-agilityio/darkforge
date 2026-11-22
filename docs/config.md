@@ -17,7 +17,7 @@ Project config lives in `.darkforge/config.json`. Only `schemaVersion` is requir
 | `models.tiers` | array of string | `["haiku","sonnet","opus","fable"]` | Model order, lowest to highest. |
 | `models.banned` | array of string | `[]` | Models subagents must never use. |
 | `models.requireExplicit` | `"darkforge"` \| `"all"` \| `"off"` | `"darkforge"` | Which Agent calls must pass an explicit `model`: darkforge agents only, all agents, or none. |
-| `models.floors` | object (agent -> model) | `{"specialist":"sonnet","security-reviewer":"sonnet"}` | Minimum model per agent short name. |
+| `models.floors` | object (agent -> model) | `{"specialist":"sonnet","security-reviewer":"sonnet"}` | Minimum model per agent short name. Compared by tier order only: a model or floor not listed in `models.tiers` (or a missing model) is never treated as below the floor. Missing models are caught by `requireExplicit`, banned ones by `models.banned`. |
 | `escalation.raiseAfterFixRounds` | number | `2` | Fix rounds before raising the implementer's model tier. |
 | `escalation.askOwnerAfterFixRounds` | number | `3` | Fix rounds before asking the owner. |
 | `git.baseBranch` | string | `"main"` | Branch tasks merge into. |

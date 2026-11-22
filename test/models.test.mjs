@@ -19,6 +19,13 @@ test("isBelowFloor", () => {
   assert.equal(isBelowFloor("builder", "haiku", cfg()), false);
 });
 
+test("isBelowFloor ignores unknown models and floors", () => {
+  assert.equal(isBelowFloor("specialist", "claude-xyz", cfg()), false);
+  assert.equal(isBelowFloor("specialist", undefined, cfg()), false);
+  const c = cfg(); c.models.floors.specialist = "nope";
+  assert.equal(isBelowFloor("specialist", "haiku", c), false);
+});
+
 test("route", () => {
   const r = route("high", cfg());
   assert.deepEqual(r.implementer, { agent: "specialist", model: "opus" });

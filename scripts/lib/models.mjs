@@ -9,7 +9,9 @@ export function isBelowFloor(agentShortName, model, config) {
   if (!floor) return false;
   const floorIdx = tierIndex(floor, config);
   if (floorIdx < 0) return false;
-  return tierIndex(model, config) < floorIdx;
+  const idx = tierIndex(model, config);
+  if (idx < 0) return false;
+  return idx < floorIdx;
 }
 
 export function route(risk, config) {

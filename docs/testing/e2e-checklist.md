@@ -12,7 +12,7 @@ CI runs only the `node:test` suites. Before each release, run this once on Windo
 
 Disable or uninstall superpowers first.
 
-- [ ] `/darkforge:init`: questions come one at a time with reasons; "not decided yet" becomes a `Q-NN`; `.darkforge/config.json`, `memory-bank/`, constraints file, `CLAUDE.md` block written; gate prints the marker. Put one model in `models.banned`.
+- [ ] `/darkforge:init`: questions come one at a time with reasons; "not decided yet" becomes a `Q-NN`; `.darkforge/config.json`, `memory-bank/`, constraints file, `CLAUDE.md` block written; gate prints the marker. Put one model in `models.banned`. Commit and push the init files to the base branch, as the skill asks; `.darkforge/ledger.jsonl` is in `.gitignore`.
 - [ ] Session restart shows the three-line brief.
 - [ ] `/darkforge:plan-phase` for a tiny phase with two tasks (one `low`, one `medium` risk): phase plan and two packages written, plan merged.
 - [ ] `/darkforge:next-task` (first task): branch created, implementer and a different reviewer dispatched with explicit models, gate passes, memory bank updated, merged; report shows ledger numbers.
@@ -24,9 +24,9 @@ Disable or uninstall superpowers first.
 
 ## Run B: with superpowers
 
-Install superpowers; write a two-task plan with its planning skill into `docs/superpowers/plans/`.
+Install superpowers; write a two-task plan with its planning skill into `docs/superpowers/plans/` and leave it uncommitted.
 
-- [ ] `/darkforge:plan-phase` uses that plan as input instead of the requirements interview.
+- [ ] `/darkforge:plan-phase` uses that plan as input instead of the requirements interview; it stashes the uncommitted plan file around `task start`, and the plan file is committed on `task/P<N>-plan` and reaches the base branch with the merge.
 - [ ] `/darkforge:next-task` ×2 and `/darkforge:phase-review` as in run A.
 
 ## Results

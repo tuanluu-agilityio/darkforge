@@ -181,12 +181,18 @@ export function recordSubagentStop(root, input, now = new Date()) {
   return record(root, now, { task: state.task, phase: state.phase, kind: "subagent", agent }, r);
 }
 
-/** Stop: record the main transcript lines added since the last Stop. */
+/**
+ * Stop: record the main transcript lines added since the last Stop. With no active task, the first
+ * recorded Stop after a merge goes to the merged task (`lastTask`), which is then cleared.
+ */
 export function recordStop(root, input, now = new Date()) {
   const r = countNew(root, input.transcript_path);
   if (!r || r.tokens === 0) return null;
   const state = readState(root);
-  return record(root, now, { task: state.task, phase: "orchestrator", kind: "orchestrator", agent: null }, r);
+  const task = state.task ?? state.lastTask ?? null;
+  const rec = record(root, now, { task, phase: "orchestrator", kind: "orchestrator", agent: null }, r);
+  if (state.lastTask) writeState(root, { lastTask: null });
+  return rec;
 }
 
 const USAGE = `usage: darkforge ledger phase <${PHASES.join("|")}>\n       darkforge ledger report\n`;

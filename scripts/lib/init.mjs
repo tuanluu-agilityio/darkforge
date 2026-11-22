@@ -9,7 +9,7 @@ const TEMPLATES = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", 
 const BEGIN = "<!-- darkforge:begin -->";
 const END = "<!-- darkforge:end -->";
 const MEMORY_FILES = ["activeContext", "progress", "backlog", "decisions", "systemPatterns", "techContext", "projectbrief"];
-const GITIGNORE_LINES = [".darkforge/state.json", ".darkforge/gate.json", ".darkforge/offsets/"];
+const GITIGNORE_LINES = [".darkforge/state.json", ".darkforge/gate.json", ".darkforge/offsets/", ".darkforge/ledger.jsonl"];
 const GATE_CMD = {
   windows: "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1",
   unix: "bash scripts/check.sh",

@@ -9,7 +9,7 @@ user-invocable: true
 You orchestrate. You never write task code or tests yourself. `df <args>` means `node "${CLAUDE_PLUGIN_ROOT}/scripts/darkforge.mjs" <args>`. Talk to the owner in `project.ownerLanguage` from `.darkforge/config.json`; files stay in English. When a `df` command exits non-zero, stop and report its output; never work around a refusal.
 
 ## 1. Pick
-Read only `memory-bank/activeContext.md` and `memory-bank/progress.md`. The task is the one under `## Next`. Stop and ask the owner if a `## Waiting on owner` question blocks it or `docs/tasks/NNN-*.md` does not exist. From the package read only its header line (agent, model, branch, reviewer, risk); the agents read the rest.
+Read only `memory-bank/activeContext.md` and `memory-bank/progress.md`. The task is the one under `## Next`. If `## Next` is planning or `phase-review`, or the current task id starts with `P`, tell the owner to run `/darkforge:plan-phase` or `/darkforge:phase-review` and stop. Stop and ask the owner if a `## Waiting on owner` question blocks it or `docs/tasks/NNN-*.md` does not exist. From the package read only its header line (agent, model, branch, reviewer, risk); the agents read the rest.
 
 Resuming (the session brief names a current task): stay on its branch, skip `task start`, and continue from the first step not yet done (check `git log` on the branch).
 
@@ -17,7 +17,7 @@ Resuming (the session brief names a current task): stay on its branch, skip `tas
 `df task start NNN <slug>`, slug from the header's `task/NNN-<slug>`. Then apply `model-routing` to get implementer and reviewer (agent + model).
 
 ## 3. Implement
-`df ledger phase implement`, then dispatch `darkforge:<implementer>` with the routed `model` and a short prompt: `Implement docs/tasks/NNN-<slug>.md on branch task/NNN-<slug>.` Do not paste the package. Keep the returned agent id. If it reports blocked, answer from the docs via `SendMessage` to that agent, or ask the owner.
+`df ledger phase implement`, then dispatch `darkforge:<implementer>` with the routed `model` and a short prompt: `Implement docs/tasks/NNN-<slug>.md on branch task/NNN-<slug>.` Do not paste the package. Keep the returned agent id. Wait for its report before step 4; never start the review while it runs. If it reports blocked, answer from the docs via `SendMessage` to that agent, or ask the owner.
 
 ## 4. Review
 `df ledger phase review`, then dispatch `darkforge:<reviewer>` (a different agent from the implementer) with the routed `model` and: `Review branch task/NNN-<slug> against docs/tasks/NNN-<slug>.md. Base ref: <base>.` Base is `<git.remote>/<git.baseBranch>`, or `git.baseBranch` when `git.remote` is null. Keep its agent id.
@@ -36,13 +36,13 @@ After `APPROVED`, edit:
 - `activeContext.md`: one line under `## Where we are`; under `## Next` the next task from the phase plan whose dependencies are merged, or `phase-review`; drop answered `Q-NN` rows. Keep it under 60 lines.
 - `decisions.md`: one line per decision the reports made; `backlog.md`: should-fix items and follow-ups.
 
-Commit `docs: task NNN memory bank`. `df memory lint` must print `memory: ok`; fix, commit, re-run otherwise.
+Stage only `git add memory-bank/` (never `git add -A` or `.`) and commit `docs: task NNN memory bank`. `df memory lint` must print `memory: ok`; fix, commit, re-run otherwise.
 
 ## 7. Gate
-Skip only if HEAD is still the commit the reviewer gated (no commit since). The memory-bank commit changes HEAD, so normally run `df gate`. On failure send the failing lines to the implementer as a fix round (step 5). `task merge` refuses a stale gate anyway.
+Run `df gate` (the memory-bank commit moved HEAD; `task merge` refuses a stale gate). On failure send the failing lines to the implementer as a fix round (step 5).
 
 ## 8. Merge
 `df ledger phase orchestrator`, then `df task merge NNN --title "<package title>"`. It pushes, opens the PR, waits for checks and merges, or merges locally without a remote. If it refuses, fix the cause it names and re-run.
 
 ## 9. Report
-Run `df ledger report`. Tell the owner in `ownerLanguage`, at most 6 lines: task and result, models used, fix rounds, the task's row (implement/review/fix/orchestrator/total), anything the owner must decide, next task. Orchestrator tokens of this turn are recorded only when the turn ends.
+Run `df ledger report`. Tell the owner in `ownerLanguage`, at most 6 lines: task and result, models used, fix rounds, the task's row (implement/review/fix/orchestrator/total), anything the owner must decide, next task. This turn's own orchestrator tokens are added to the task when the turn ends.

@@ -80,7 +80,7 @@ export function startTask(root, id, slug) {
 
     const from = git.remote ? `${git.remote}/${git.baseBranch}` : git.baseBranch;
     step(root, "git", ["switch", "-c", branch, from]);
-    writeState(root, { task: id, phase: "implement" });
+    writeState(root, { task: id, phase: "implement", lastTask: null });
     return { ok: true, message: `on ${branch} (from ${from}); task ${id} phase implement` };
   } catch (e) {
     if (e instanceof Stop) return fail(e.message);
@@ -154,7 +154,10 @@ function waitForChecks(root, git, n) {
   }
 }
 
-/** Merge the current task branch into the base branch (PR flow or local), then clear the task state. */
+/**
+ * Merge the current task branch into the base branch (PR flow or local), then clear the task state.
+ * `lastTask` keeps the id so the next Stop hook still attributes this turn's orchestrator tokens to it.
+ */
 export function mergeTask(root, id, { title } = {}) {
   let merged = null; // set once the merge has landed; later failures are cleanup failures
   try {
@@ -171,7 +174,7 @@ export function mergeTask(root, id, { title } = {}) {
       } catch (e) {
         throw new Stop(`${e.message}\nrun "git merge --abort" to undo the partial merge`);
       }
-      writeState(root, { task: null, phase: null });
+      writeState(root, { task: null, phase: null, lastTask: id });
       return { ok: true, message: `merged ${branch} into ${base} (local, no push)` };
     }
 
@@ -189,14 +192,14 @@ export function mergeTask(root, id, { title } = {}) {
 
     if (git.autoMerge) {
       step(root, "gh", ["pr", "merge", n, method, "--delete-branch", "--auto", ...pin]);
-      writeState(root, { task: null, phase: null });
+      writeState(root, { task: null, phase: null, lastTask: id });
       return { ok: true, message: `auto-merge enabled for PR #${n}; it merges when required checks pass` };
     }
 
     waitForChecks(root, git, n);
     step(root, "gh", ["pr", "merge", n, method, "--delete-branch", ...pin]);
     merged = n;
-    writeState(root, { task: null, phase: null });
+    writeState(root, { task: null, phase: null, lastTask: id });
 
     step(root, "git", ["switch", base]);
     step(root, "git", ["pull", "--ff-only", git.remote, base]);

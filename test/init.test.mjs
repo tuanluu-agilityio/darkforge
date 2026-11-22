@@ -92,7 +92,7 @@ test(".gitignore: lines appended once, existing content kept", () => {
   applyInit(d, {});
   applyInit(d, {});
   const lines = read(d, ".gitignore").split("\n");
-  assert.deepEqual(lines.filter((l) => l), ["node_modules/", ".darkforge/gate.json", ".darkforge/state.json", ".darkforge/offsets/"]);
+  assert.deepEqual(lines.filter((l) => l), ["node_modules/", ".darkforge/gate.json", ".darkforge/state.json", ".darkforge/offsets/", ".darkforge/ledger.jsonl"]);
 });
 
 test("defaults round-trip via DARKFORGE_HOME; only policy fields saved", async () => {

@@ -25,14 +25,18 @@ function readJson(file) {
   }
 }
 
-/** Missing or corrupt file gives `{task:null, phase:null}`. A legacy `offsets` key is ignored. */
+/**
+ * Missing or corrupt file gives `{task:null, phase:null}`. A legacy `offsets` key is ignored.
+ * `lastTask` (the task merged most recently, until the next Stop records it) is present only when set.
+ */
 export function readState(root) {
   const parsed = readJson(stateFile(root));
   if (!parsed) return defaults();
-  const { offsets: _legacy, ...rest } = parsed;
+  const { offsets: _legacy, lastTask: _last, ...rest } = parsed;
   const state = { ...rest, ...defaults() };
   if (typeof parsed.task === "string") state.task = parsed.task;
   if (PHASES.includes(parsed.phase)) state.phase = parsed.phase;
+  if (typeof parsed.lastTask === "string" && parsed.lastTask !== "") state.lastTask = parsed.lastTask;
   return state;
 }
 
@@ -40,6 +44,7 @@ export function readState(root) {
 export function writeState(root, patch) {
   const next = { ...readState(root), ...patch };
   delete next.offsets;
+  if (next.lastTask == null) delete next.lastTask;
   writeAtomic(stateFile(root), next);
   return next;
 }

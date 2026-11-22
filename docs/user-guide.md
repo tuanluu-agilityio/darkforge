@@ -83,7 +83,8 @@ Token ledger (`hooks/ledger.mjs`, `darkforge ledger report`) is best effort:
 - `tokens` includes cache reads, which are billed far cheaper than other input; each record also stores `usage` (input, output, cache write, cache read), and the report prints the grand-total breakdown.
 - Read offsets are kept per transcript in `.darkforge/offsets/`, so a resumed subagent is counted only for its new lines.
 - Task and phase come from `.darkforge/state.json` at the moment the hook runs; set the phase with `darkforge ledger phase <implement|review|fix|orchestrator>`. A subagent that finishes after the phase changed is recorded under the new phase.
-- Orchestrator tokens are recorded when the main session's turn ends (Stop). If one turn runs a whole task including `task merge`, the task state is already cleared by then, so that turn's orchestrator tokens are recorded under `(no task)`.
+- Orchestrator tokens are recorded when the main session's turn ends (Stop). The first recorded Stop after `task merge` is attributed to the task just merged; later ones with no active task go to `(no task)`.
+- `.darkforge/ledger.jsonl` is local and git-ignored (init adds it to `.gitignore`), so it never blocks a branch switch. `next-task` copies each task's token total into its `memory-bank/progress.md` row, so the committed history keeps the numbers.
 - Claude Code runs SubagentStop for the built-in web-fetch subagent only from managed settings, so plugin hooks do not record its tokens.
 
 Process:

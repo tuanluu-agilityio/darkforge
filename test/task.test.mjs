@@ -88,6 +88,14 @@ test("start (clean, remote): fetch, check local+remote, branch from remote base,
   assert.match(r.message, /task\/7-add-thing/);
 });
 
+test("start clears lastTask left by the previous merge", () => {
+  const root = project({}, { task: null });
+  writeState(root, { lastTask: "6" });
+  fake();
+  assert.equal(startTask(root, "7", "add-thing").ok, true);
+  assert.deepEqual(readState(root), { task: "7", phase: "implement" });
+});
+
 test("start (clean, no remote): branch from local base, no fetch", () => {
   const root = project({ remote: null, baseBranch: "trunk" }, { task: null });
   const f = fake();
@@ -154,7 +162,7 @@ test("merge with PR + autoMerge: push, create, merge --auto, stop; state cleared
     `gh pr merge 42 --squash --delete-branch --auto --match-head-commit ${HEAD}`,
   ]);
   assert.match(r.message, /auto-merge enabled for PR #42; it merges when required checks pass/);
-  assert.deepEqual(readState(root), { task: null, phase: null });
+  assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "7" });
   const body = f.calls.find((c) => c[1] === "pr" && c[2] === "create").at(-1);
   assert.match(body, /Task 7/);
   assert.match(body, /Add thing/);
@@ -204,7 +212,7 @@ test("merge with PR + watch: checks, merge, switch, pull, delete local branch", 
     "git branch --list task/7-add-thing",
     "git branch -d task/7-add-thing",
   ]);
-  assert.deepEqual(readState(root), { task: null, phase: null });
+  assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "7" });
 });
 
 test("merge with PR + watch: local branch already deleted by gh -> skip branch -d", () => {
@@ -344,7 +352,7 @@ test("merge: failing cleanup after a successful merge reports it, state already 
   assert.equal(r.ok, false);
   assert.match(r.message, /PR #42 merged/);
   assert.match(r.message, /diverged/);
-  assert.deepEqual(readState(root), { task: null, phase: null });
+  assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "7" });
 });
 
 // ---------- merge: local ----------
@@ -355,7 +363,7 @@ test("merge local (prFlow false): switch base, merge --no-ff, no push", () => {
   const r = mergeTask(root, "7", { title: "T" });
   assert.equal(r.ok, true, r.message);
   assert.deepEqual(f.lines(), [...PRECHECKS, "git switch main", "git merge --no-ff task/7-add-thing -m Merge task/7-add-thing"]);
-  assert.deepEqual(readState(root), { task: null, phase: null });
+  assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "7" });
 });
 
 test("merge local (remote null): diff against local base", () => {
@@ -504,5 +512,5 @@ test("real git: start and local merge in a temp repo with a space in its path", 
   assert.equal(git(root, "log", "-1", "--format=%s"), "Merge task/3-demo-task");
   assert.equal(git(root, "rev-parse", "HEAD^2"), head);
   assert.ok(fs.existsSync(path.join(root, "feature.txt")));
-  assert.deepEqual(readState(root), { task: null, phase: null });
+  assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "3" });
 });

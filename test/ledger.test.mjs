@@ -249,6 +249,33 @@ test("SubagentStop with empty agent_type and no state records nulls", () => {
   assert.equal(rec.agent, null);
 });
 
+test("first Stop after a merge goes to the merged task (lastTask), the next one to no task", () => {
+  const dir = tmpProject();
+  writeState(dir, { task: null, phase: null, lastTask: "T3" });
+  const t = path.join(dir, "main transcript.jsonl");
+  fs.writeFileSync(t, mainText());
+  const input = hookInput("stop.json", { cwd: dir, transcript_path: t });
+
+  assert.equal(runHook(dir, input).status, 0);
+  assert.equal(records(dir)[0].task, "T3");
+  assert.deepEqual(readState(dir), { task: null, phase: null });
+
+  fs.appendFileSync(t, JSON.stringify({ message: { id: "m9", model: "claude-haiku-4-5", usage: { input_tokens: 1, output_tokens: 2 } } }) + "\n");
+  runHook(dir, input);
+  const recs = records(dir);
+  assert.equal(recs.length, 2);
+  assert.equal(recs[1].task, null);
+});
+
+test("Stop with an active task ignores lastTask", () => {
+  const dir = tmpProject();
+  writeState(dir, { task: "T4", phase: "fix", lastTask: "T3" });
+  const t = path.join(dir, "main transcript.jsonl");
+  fs.writeFileSync(t, mainText());
+  runHook(dir, hookInput("stop.json", { cwd: dir, transcript_path: t }));
+  assert.equal(records(dir)[0].task, "T4");
+});
+
 test("Stop counts only lines after the stored offset; restarts when the transcript shrinks", () => {
   const dir = tmpProject();
   writeState(dir, { task: "T2", phase: "review" });

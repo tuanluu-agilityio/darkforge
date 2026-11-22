@@ -12,7 +12,7 @@ Read-only: change no file, branch or state, dispatch no agent.
 2. Read only `memory-bank/activeContext.md` and `memory-bank/progress.md`.
 3. Reply in `project.ownerLanguage` from `.darkforge/config.json`, at most 10 lines:
    - where we are and the current task, if any;
-   - tasks done / total in the current phase (from `progress.md`);
+   - tasks done (count of `done` rows in `progress.md`); a total only if `activeContext.md` states one;
    - next step and the command for it (`/darkforge:next-task`, `/darkforge:plan-phase` or `/darkforge:phase-review`);
    - open questions waiting on the owner (ids and one line each);
    - tokens: total, orchestrator vs subagents, the top two models, and the last task's total. Copy numbers from the report; do not recompute.

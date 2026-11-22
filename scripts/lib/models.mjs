@@ -1,0 +1,29 @@
+export const TIERS = ["haiku", "sonnet", "opus", "fable"];
+
+export function tierIndex(model, config) {
+  return config.models.tiers.indexOf(model);
+}
+
+export function isBelowFloor(agentShortName, model, config) {
+  const floor = config.models.floors?.[agentShortName];
+  if (!floor) return false;
+  const floorIdx = tierIndex(floor, config);
+  if (floorIdx < 0) return false;
+  return tierIndex(model, config) < floorIdx;
+}
+
+export function route(risk, config) {
+  const r = config.routing[risk];
+  if (!r) throw new Error(`unknown risk level: ${risk}`);
+  return { implementer: { ...r.implementer }, reviewer: { ...r.reviewer } };
+}
+
+export function raiseTier(model, config) {
+  const tiers = config.models.tiers;
+  const i = tierIndex(model, config);
+  if (i < 0) return model;
+  for (let j = i + 1; j < tiers.length; j++) {
+    if (!config.models.banned.includes(tiers[j])) return tiers[j];
+  }
+  return model;
+}

@@ -1,5 +1,5 @@
 {
-  "description": "darkforge: model-guard for Agent calls",
+  "description": "darkforge: model-guard for Agent calls; token ledger on SubagentStop and Stop",
   "hooks": {
     "PreToolUse": [
       {
@@ -8,7 +8,37 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/model-guard.mjs"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/model-guard.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/ledger.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/ledger.mjs"
+            ],
             "timeout": 10
           }
         ]

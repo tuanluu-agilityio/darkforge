@@ -35,3 +35,14 @@ Default routing:
 | low | builder / sonnet | reviewer / sonnet |
 | medium | builder / sonnet | reviewer / opus |
 | high | specialist / opus | security-reviewer / opus |
+
+## Known limits
+
+Token ledger (`hooks/ledger.mjs`, `darkforge ledger report`) is best effort:
+
+- Hook inputs carry no model. The model of a record is the `message.model` of the last transcript line that has one; it is `null` when no counted line has a model.
+- `agent` is the SubagentStop `agent_type`; it is `null` when Claude Code sends an empty string (internal agents such as prompt suggestions in a session run without `--agent`).
+- The transcript is written asynchronously and may lag the conversation when Stop fires. Lines not yet written are counted at the next Stop, so the last turn of a session may be missed.
+- Lines that share a `message.id` (one API response logged per content block) count once.
+- Task and phase come from `.darkforge/state.json` at the moment the hook runs; set the phase with `darkforge ledger phase <implement|review|fix|orchestrator>`. A subagent that finishes after the phase changed is recorded under the new phase.
+- Claude Code runs SubagentStop for the built-in web-fetch subagent only from managed settings, so plugin hooks do not record its tokens.

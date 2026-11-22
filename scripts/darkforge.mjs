@@ -2,10 +2,12 @@
 import { pathToFileURL } from "node:url";
 import { doctor } from "./lib/doctor.mjs";
 import { gateCommand } from "./lib/gate.mjs";
+import { ledgerCommand } from "./lib/ledger.mjs";
 
 /** Command registry: name -> async (args, ctx) => exit code. Later tasks add entries here. */
 export const commands = {
   gate: gateCommand,
+  ledger: ledgerCommand,
   async doctor(_args, ctx) {
     const r = doctor({ cwd: ctx.cwd });
     ctx.stdout(r.lines.join("\n") + "\n");

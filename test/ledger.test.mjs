@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readState, writeState } from "../scripts/lib/state.mjs";
+import { readState, writeState, readOffset, writeOffset } from "../scripts/lib/state.mjs";
 import { sumUsage, appendRecord, readRecords, report } from "../scripts/lib/ledger.mjs";
 import { main } from "../scripts/darkforge.mjs";
 
@@ -74,6 +74,30 @@ test("sumUsage does not count an unterminated partial last line", () => {
   assert.equal(r.lines, 1);
 });
 
+test("sumUsage skips lines of the previous window's last message and returns lastId", () => {
+  const line = (id, out) => JSON.stringify({ message: { id, usage: { input_tokens: 1000, output_tokens: out } } }) + "\n";
+  const first = sumUsage(line("m1", 5), 0);
+  assert.equal(first.tokens, 1005);
+  assert.equal(first.lastId, "m1");
+  const second = sumUsage(line("m1", 5) + line("m1", 5) + line("m2", 7), 1, first.lastId);
+  assert.equal(second.tokens, 1007);
+  assert.equal(second.lastId, "m2");
+  assert.equal(sumUsage("", 0, "m9").lastId, "m9");
+});
+
+test("sumUsage skips sidechain lines and reports the usage breakdown", () => {
+  const text =
+    JSON.stringify({ isSidechain: true, message: { usage: { input_tokens: 100 } } }) +
+    "\n" +
+    JSON.stringify({
+      message: { usage: { input_tokens: 1, output_tokens: 2, cache_creation_input_tokens: 3, cache_read_input_tokens: 4 } },
+    }) +
+    "\n";
+  const r = sumUsage(text, 0);
+  assert.equal(r.tokens, 10);
+  assert.deepEqual(r.usage, { input: 1, output: 2, cacheWrite: 3, cacheRead: 4 });
+});
+
 test("sumUsage skips the <synthetic> model", () => {
   const r = sumUsage(fs.readFileSync(path.join(transcripts, "subagent.jsonl"), "utf8"), 0);
   assert.equal(r.tokens, 500);
@@ -84,18 +108,32 @@ test("sumUsage skips the <synthetic> model", () => {
 
 test("readState returns defaults for a missing or corrupt file", () => {
   const root = tmpProject(false);
-  assert.deepEqual(readState(root), { task: null, phase: null, offsets: {} });
+  assert.deepEqual(readState(root), { task: null, phase: null });
   fs.mkdirSync(path.join(root, ".darkforge"));
   fs.writeFileSync(path.join(root, ".darkforge", "state.json"), "{nope");
-  assert.deepEqual(readState(root), { task: null, phase: null, offsets: {} });
+  assert.deepEqual(readState(root), { task: null, phase: null });
 });
 
-test("writeState creates .darkforge and merges without dropping offsets", () => {
+test("writeState creates .darkforge, merges, and drops a legacy offsets key", () => {
   const root = tmpProject(false);
-  writeState(root, { offsets: { "/a b.jsonl": 3 } });
-  writeState(root, { task: "006-ledger", phase: "implement" });
-  writeState(root, { offsets: { "/c.jsonl": 1 } });
-  assert.deepEqual(readState(root), { task: "006-ledger", phase: "implement", offsets: { "/a b.jsonl": 3, "/c.jsonl": 1 } });
+  writeState(root, { task: "006-ledger" });
+  writeState(root, { phase: "implement" });
+  assert.deepEqual(readState(root), { task: "006-ledger", phase: "implement" });
+  const file = path.join(root, ".darkforge", "state.json");
+  fs.writeFileSync(file, JSON.stringify({ task: "T", phase: "fix", offsets: { a: 1 } }));
+  assert.deepEqual(readState(root), { task: "T", phase: "fix" });
+  writeState(root, { phase: "review" });
+  assert.equal("offsets" in JSON.parse(fs.readFileSync(file, "utf8")), false);
+});
+
+test("offsets are kept per transcript in separate files", () => {
+  const root = tmpProject(false);
+  assert.deepEqual(readOffset(root, "/a b.jsonl"), { line: 0, lastId: null });
+  writeOffset(root, "/a b.jsonl", { line: 3, lastId: "m1" });
+  writeOffset(root, "/c.jsonl", { line: 1, lastId: null });
+  assert.deepEqual(readOffset(root, "/a b.jsonl"), { line: 3, lastId: "m1" });
+  assert.deepEqual(readOffset(root, "/c.jsonl"), { line: 1, lastId: null });
+  assert.equal(fs.readdirSync(path.join(root, ".darkforge", "offsets")).length, 2);
 });
 
 // ---- report ----
@@ -103,7 +141,7 @@ test("writeState creates .darkforge and merges without dropping offsets", () => 
 test("report groups by task, model and kind, totals match", () => {
   const root = tmpProject();
   const at = "2026-11-23T00:00:00.000Z";
-  appendRecord(root, { at, task: "T1", phase: "implement", kind: "subagent", agent: "builder", model: "sonnet", tokens: 100 });
+  appendRecord(root, { at, task: "T1", phase: "implement", kind: "subagent", agent: "builder", model: "sonnet", tokens: 100, usage: { input: 10, output: 20, cacheWrite: 30, cacheRead: 40 } });
   appendRecord(root, { at, task: "T1", phase: "review", kind: "subagent", agent: "reviewer", model: "opus", tokens: 40 });
   appendRecord(root, { at, task: "T1", phase: "fix", kind: "subagent", agent: "builder", model: "sonnet", tokens: 10 });
   appendRecord(root, { at, task: "T1", phase: "orchestrator", kind: "orchestrator", agent: null, model: "opus", tokens: 5 });
@@ -118,6 +156,7 @@ test("report groups by task, model and kind, totals match", () => {
   assert.match(text, /^orchestrator\s+5$/m);
   assert.match(text, /^subagents\s+157$/m);
   assert.match(text, /^total\s+162$/m);
+  assert.match(text, /^total breakdown: input 10, output 20, cache write 30, cache read 40$/m);
 });
 
 test("report on an empty ledger says so", () => {
@@ -169,8 +208,36 @@ test("SubagentStop records the subagent transcript with task and phase from stat
   assert.equal(recs.length, 1);
   const { at, ...rest } = recs[0];
   assert.ok(!Number.isNaN(Date.parse(at)));
-  assert.deepEqual(rest, { task: "T1", phase: "implement", kind: "subagent", agent: "darkforge:builder", model: "claude-sonnet-4-6", tokens: 500 });
-  assert.deepEqual(readState(dir).offsets, {});
+  assert.deepEqual(rest, {
+    task: "T1",
+    phase: "implement",
+    kind: "subagent",
+    agent: "darkforge:builder",
+    model: "claude-sonnet-4-6",
+    tokens: 500,
+    usage: { input: 150, output: 100, cacheWrite: 50, cacheRead: 200 },
+  });
+});
+
+test("resumed subagent: second SubagentStop records only new lines; transcripts keep separate offsets", () => {
+  const dir = tmpProject();
+  const a = path.join(dir, "agent a.jsonl");
+  const b = path.join(dir, "agent b.jsonl");
+  const line = (id, n) => JSON.stringify({ message: { id, model: "claude-sonnet-4-6", usage: { input_tokens: n } } }) + "\n";
+  fs.writeFileSync(a, line("a1", 10));
+  fs.writeFileSync(b, line("b1", 20));
+  const stop = (p) => runHook(dir, hookInput("subagent-stop.json", { cwd: dir, agent_transcript_path: p }));
+  stop(a);
+  stop(b);
+  fs.appendFileSync(a, line("a1", 10) + line("a2", 3));
+  stop(a);
+  stop(b);
+  assert.deepEqual(
+    records(dir).map((r) => r.tokens),
+    [10, 20, 3],
+  );
+  assert.deepEqual(readOffset(dir, a), { line: 3, lastId: "a2" });
+  assert.deepEqual(readOffset(dir, b), { line: 1, lastId: "b1" });
 });
 
 test("SubagentStop with empty agent_type and no state records nulls", () => {
@@ -197,7 +264,7 @@ test("Stop counts only lines after the stored offset; restarts when the transcri
   assert.equal(recs[0].task, "T2");
   assert.equal(recs[0].agent, null);
   assert.equal(recs[0].tokens, 1665);
-  assert.equal(readState(dir).offsets[t], 4);
+  assert.equal(readOffset(dir, t).line, 4);
   assert.equal(readState(dir).phase, "review");
 
   // No new lines: no record.
@@ -210,14 +277,30 @@ test("Stop counts only lines after the stored offset; restarts when the transcri
   assert.equal(recs.length, 2);
   assert.equal(recs[1].tokens, 3);
   assert.equal(recs[1].model, "claude-haiku-4-5");
-  assert.equal(readState(dir).offsets[t], 5);
+  assert.equal(readOffset(dir, t).line, 5);
 
   fs.writeFileSync(t, JSON.stringify({ message: { usage: { input_tokens: 8 } } }) + "\n");
   runHook(dir, input);
   recs = records(dir);
   assert.equal(recs.length, 3);
   assert.equal(recs[2].tokens, 8);
-  assert.equal(readState(dir).offsets[t], 1);
+  assert.equal(readOffset(dir, t).line, 1);
+});
+
+test("a message split across two Stops is counted once", () => {
+  const dir = tmpProject();
+  const t = path.join(dir, "main.jsonl");
+  const block = JSON.stringify({ message: { id: "m1", model: "claude-opus-4-1", usage: { input_tokens: 1000, output_tokens: 5 } } }) + "\n";
+  const input = hookInput("stop.json", { cwd: dir, transcript_path: t });
+  fs.writeFileSync(t, block);
+  runHook(dir, input);
+  fs.appendFileSync(t, block);
+  runHook(dir, input);
+  assert.deepEqual(
+    records(dir).map((r) => r.tokens),
+    [1005],
+  );
+  assert.deepEqual(readOffset(dir, t), { line: 2, lastId: "m1" });
 });
 
 test("Stop with a missing transcript is silent", () => {

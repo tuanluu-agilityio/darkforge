@@ -3,9 +3,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { findProjectRoot, loadConfig } from "./config.mjs";
-import { PHASES, readState, writeState } from "./state.mjs";
+import { PHASES, readOffset, readState, writeOffset, writeState } from "./state.mjs";
 
-const USAGE_KEYS = ["input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"];
+const USAGE_KEYS = {
+  input: "input_tokens",
+  output: "output_tokens",
+  cacheWrite: "cache_creation_input_tokens",
+  cacheRead: "cache_read_input_tokens",
+};
+const zeroUsage = () => ({ input: 0, output: 0, cacheWrite: 0, cacheRead: 0 });
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const ledgerFile = (root) => path.join(root, ".darkforge", "ledger.jsonl");
 
@@ -20,39 +26,55 @@ function parseLine(line) {
 
 /**
  * Sum token usage of the transcript lines after the first `fromLine` lines.
- * `lines` is the number of complete lines (an unterminated last line that is not valid JSON
- * is still being written and is left for the next call). Lines sharing a `message.id` are one
- * API response logged per content block, so only the last of them counts. `model` is the
- * `message.model` of the last counted line that has one (ignoring "<synthetic>"), else null.
+ * - `lines` is the number of complete lines (an unterminated last line that is not valid JSON
+ *   is still being written and is left for the next call).
+ * - Lines sharing a `message.id` are one API response logged per content block: only the last
+ *   of them counts. Lines whose id is `skipId` (the last message of the previous window, already
+ *   counted) are skipped. Sidechain lines are skipped.
+ * - `model` is the `message.model` of the last counted line that has one (ignoring
+ *   "<synthetic>"), else null. `lastId` is the id of the last line that has one (`skipId` when
+ *   the window has none).
  */
-export function sumUsage(jsonlText, fromLine = 0) {
+export function sumUsage(jsonlText, fromLine = 0, skipId = null) {
   const parts = String(jsonlText).split("\n");
   const last = parts.pop();
   if (last.trim() !== "" && parseLine(last)) parts.push(last);
   const lines = parts.length;
 
+  const usage = zeroUsage();
+  const add = (u) => {
+    for (const k of Object.keys(usage)) usage[k] += u[k];
+  };
   const byId = new Map();
-  let anon = 0;
   let model = null;
+  let lastId = skipId;
   for (let i = Math.max(0, fromLine); i < lines; i++) {
-    const msg = parseLine(parts[i])?.message;
+    const entry = parseLine(parts[i]);
+    if (!entry || entry.isSidechain === true) continue;
+    const msg = entry.message;
     if (!isObj(msg)) continue;
+    const id = typeof msg.id === "string" && msg.id !== "" ? msg.id : null;
+    if (id !== null) lastId = id;
+    if (id !== null && id === skipId) continue;
     if (typeof msg.model === "string" && msg.model !== "" && msg.model !== "<synthetic>") model = msg.model;
     if (!isObj(msg.usage)) continue;
-    let n = 0;
-    for (const k of USAGE_KEYS) if (Number.isFinite(msg.usage[k]) && msg.usage[k] > 0) n += msg.usage[k];
-    if (typeof msg.id === "string" && msg.id !== "") byId.set(msg.id, n);
-    else anon += n;
+    const u = zeroUsage();
+    for (const [k, key] of Object.entries(USAGE_KEYS)) {
+      if (Number.isFinite(msg.usage[key]) && msg.usage[key] > 0) u[k] = msg.usage[key];
+    }
+    if (id !== null) byId.set(id, u);
+    else add(u);
   }
-  let tokens = anon;
-  for (const n of byId.values()) tokens += n;
-  return { tokens, lines, model };
+  for (const u of byId.values()) add(u);
+  const tokens = usage.input + usage.output + usage.cacheWrite + usage.cacheRead;
+  return { tokens, lines, model, lastId, usage };
 }
 
 /** Append one record as one JSON line. Never rewrites the file (concurrent subagents append). */
-export function appendRecord(root, { at, task, phase, kind, agent, model, tokens }) {
+export function appendRecord(root, { at, task, phase, kind, agent, model, tokens, usage }) {
   fs.mkdirSync(path.join(root, ".darkforge"), { recursive: true });
   const rec = { at, task: task ?? null, phase: phase ?? null, kind, agent: agent ?? null, model: model ?? null, tokens };
+  if (isObj(usage)) rec.usage = usage;
   fs.appendFileSync(ledgerFile(root), JSON.stringify(rec) + "\n");
 }
 
@@ -72,7 +94,9 @@ export function readRecords(root) {
 function table(header, rows) {
   const all = header ? [header, ...rows] : rows;
   const widths = all[0].map((_, c) => Math.max(...all.map((r) => String(r[c]).length)));
-  return all.map((r) => r.map((v, c) => (c === 0 ? String(v).padEnd(widths[c]) : String(v).padStart(widths[c]))).join("  ")).join("\n");
+  return all
+    .map((r) => r.map((v, c) => (c === 0 ? String(v).padEnd(widths[c]) : String(v).padStart(widths[c]))).join("  "))
+    .join("\n");
 }
 
 /** Plain-text report: per task by phase, per model, orchestrator vs subagents, grand total. */
@@ -82,6 +106,7 @@ export function report(root) {
 
   const tasks = new Map();
   const models = new Map();
+  const usage = zeroUsage();
   let orchestrator = 0;
   let subagents = 0;
   let total = 0;
@@ -96,6 +121,7 @@ export function report(root) {
     if (r.kind === "orchestrator") orchestrator += r.tokens;
     else subagents += r.tokens;
     total += r.tokens;
+    if (isObj(r.usage)) for (const k of Object.keys(usage)) if (Number.isFinite(r.usage[k])) usage[k] += r.usage[k];
   }
 
   const taskRows = [...tasks].map(([t, v]) => [t, v.implement, v.review, v.fix, v.orchestrator, v.total]);
@@ -112,6 +138,7 @@ export function report(root) {
       ["subagents", subagents],
       ["total", total],
     ]),
+    `total breakdown: input ${usage.input}, output ${usage.output}, cache write ${usage.cacheWrite}, cache read ${usage.cacheRead}`,
   ].join("\n");
 }
 
@@ -128,32 +155,38 @@ function readTranscript(p) {
   }
 }
 
-/** SubagentStop: record the whole subagent transcript. */
-export function recordSubagentStop(root, input, now = new Date()) {
-  const text = readTranscript(input.agent_transcript_path);
+/** Count the transcript lines added since its stored offset, then store the new offset. */
+function countNew(root, transcriptPath) {
+  const text = readTranscript(transcriptPath);
   if (text === null) return null;
-  const { tokens, model } = sumUsage(text, 0);
-  if (tokens === 0) return null;
-  const state = readState(root);
-  const agent = typeof input.agent_type === "string" && input.agent_type !== "" ? input.agent_type : null;
-  const rec = { at: now.toISOString(), task: state.task, phase: state.phase, kind: "subagent", agent, model, tokens };
+  const prev = readOffset(root, transcriptPath);
+  let r = sumUsage(text, prev.line, prev.lastId);
+  if (r.lines < prev.line) r = sumUsage(text, 0, null); // rotated or compacted
+  writeOffset(root, transcriptPath, { line: r.lines, lastId: r.lastId });
+  return r;
+}
+
+function record(root, now, fields, r) {
+  const rec = { at: now.toISOString(), ...fields, model: r.model, tokens: r.tokens, usage: r.usage };
   appendRecord(root, rec);
   return rec;
 }
 
-/** Stop: record the main transcript lines added since the stored offset, then store the new offset. */
-export function recordStop(root, input, now = new Date()) {
-  const key = input.transcript_path;
-  const text = readTranscript(key);
-  if (text === null) return null;
+/** SubagentStop: record the subagent transcript lines added since its last SubagentStop (resumes). */
+export function recordSubagentStop(root, input, now = new Date()) {
+  const r = countNew(root, input.agent_transcript_path);
+  if (!r || r.tokens === 0) return null;
   const state = readState(root);
-  let r = sumUsage(text, state.offsets[key] ?? 0);
-  if (r.lines < (state.offsets[key] ?? 0)) r = sumUsage(text, 0); // rotated or compacted
-  writeState(root, { offsets: { [key]: r.lines } });
-  if (r.tokens === 0) return null;
-  const rec = { at: now.toISOString(), task: state.task, phase: "orchestrator", kind: "orchestrator", agent: null, model: r.model, tokens: r.tokens };
-  appendRecord(root, rec);
-  return rec;
+  const agent = typeof input.agent_type === "string" && input.agent_type !== "" ? input.agent_type : null;
+  return record(root, now, { task: state.task, phase: state.phase, kind: "subagent", agent }, r);
+}
+
+/** Stop: record the main transcript lines added since the last Stop. */
+export function recordStop(root, input, now = new Date()) {
+  const r = countNew(root, input.transcript_path);
+  if (!r || r.tokens === 0) return null;
+  const state = readState(root);
+  return record(root, now, { task: state.task, phase: "orchestrator", kind: "orchestrator", agent: null }, r);
 }
 
 const USAGE = `usage: darkforge ledger phase <${PHASES.join("|")}>\n       darkforge ledger report\n`;

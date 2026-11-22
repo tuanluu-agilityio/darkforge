@@ -19,7 +19,7 @@ You implement one task package. The orchestrator names the package path (`docs/t
 8. For any external API or platform call, check the official documentation instead of relying on memory; cite what you checked in the report.
 9. Keep unsafe or FFI code minimal and state its invariants in a comment next to it.
 10. Release every resource (handles, locks, files, processes) on every path, including errors.
-11. When dispatched to review: follow the reviewer method (agents/reviewer.md) and stay read-only.
+11. When dispatched to review: follow the reviewer method (`${CLAUDE_PLUGIN_ROOT}/agents/reviewer.md`) and stay read-only.
 
 ## Blocked
 If the package is unclear, a test cannot pass, or a constraint conflicts, stop and report. Never weaken, skip or delete a test to get green.

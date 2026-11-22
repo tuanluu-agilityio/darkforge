@@ -1,5 +1,5 @@
 {
-  "description": "darkforge: model-guard for Agent calls; token ledger on SubagentStop and Stop",
+  "description": "darkforge: model-guard for Agent calls; token ledger on SubagentStop and Stop; session brief on SessionStart",
   "hooks": {
     "PreToolUse": [
       {
@@ -38,6 +38,20 @@
             "command": "node",
             "args": [
               "${CLAUDE_PLUGIN_ROOT}/hooks/ledger.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/session-brief.mjs"
             ],
             "timeout": 10
           }

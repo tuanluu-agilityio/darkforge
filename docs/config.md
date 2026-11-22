@@ -38,14 +38,4 @@ Default routing:
 
 ## Known limits
 
-Token ledger (`hooks/ledger.mjs`, `darkforge ledger report`) is best effort:
-
-- Hook inputs carry no model. The model of a record is the `message.model` of the last transcript line that has one; it is `null` when no counted line has a model.
-- `agent` is the SubagentStop `agent_type`; it is `null` when Claude Code sends an empty string (internal agents such as prompt suggestions in a session run without `--agent`).
-- The transcript is written asynchronously and may lag the conversation when Stop fires. Lines not yet written are counted at the next Stop, so the last turn of a session may be missed.
-- Lines that share a `message.id` (one API response logged per content block) count once. A response whose lines straddle two Stop (or two SubagentStop) events is counted at the first one; its later lines are skipped, so a few final output tokens may be missed.
-- Sidechain transcript lines are skipped.
-- `tokens` includes cache reads, which are billed far cheaper than other input; each record also stores `usage` (input, output, cache write, cache read), and the report prints the grand-total breakdown.
-- Read offsets are kept per transcript in `.darkforge/offsets/`, so a resumed subagent is counted only for its new lines.
-- Task and phase come from `.darkforge/state.json` at the moment the hook runs; set the phase with `darkforge ledger phase <implement|review|fix|orchestrator>`. A subagent that finishes after the phase changed is recorded under the new phase.
-- Claude Code runs SubagentStop for the built-in web-fetch subagent only from managed settings, so plugin hooks do not record its tokens.
+See [Known limits in the user guide](user-guide.md#known-limits).

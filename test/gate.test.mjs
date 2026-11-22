@@ -100,3 +100,56 @@ test("outside git: head null, gate.json written, gateFresh false", () => {
   assert.equal(rec.head, null);
   assert.equal(gateFresh(root), false);
 });
+
+test("marker must be a whole line", () => {
+  const root = project(js("console.log('NOT ALL CHECKS PASSED')"));
+  assert.equal(runGate(root).ok, false);
+});
+
+function repo() {
+  const root = project(js("console.log('ALL CHECKS PASSED')"));
+  git(root, "init");
+  git(root, "config", "user.name", "t");
+  git(root, "config", "user.email", "t@example.com");
+  git(root, "config", "commit.gpgsign", "false");
+  fs.writeFileSync(path.join(root, "a.txt"), "1");
+  git(root, "add", "a.txt");
+  git(root, "commit", "-m", "one");
+  return root;
+}
+
+test("gate on dirty tree: fresh false, warning appended", () => {
+  const root = repo();
+  fs.writeFileSync(path.join(root, "a.txt"), "2");
+  const r = runGate(root);
+  assert.equal(r.ok, true);
+  assert.match(r.output, /gate: tree has uncommitted changes; commit before merge/);
+  assert.equal(gateFresh(root), false);
+});
+
+test("modify tracked file or add untracked file after gate: fresh false", () => {
+  const root = repo();
+  runGate(root);
+  assert.equal(gateFresh(root), true);
+  fs.writeFileSync(path.join(root, "a.txt"), "2");
+  assert.equal(gateFresh(root), false);
+  git(root, "checkout", "a.txt");
+  assert.equal(gateFresh(root), true);
+  fs.writeFileSync(path.join(root, "new.txt"), "x");
+  assert.equal(gateFresh(root), false);
+});
+
+test("changes inside .darkforge/ do not affect freshness", () => {
+  const root = repo();
+  runGate(root);
+  fs.writeFileSync(path.join(root, ".darkforge", "state.json"), "{}");
+  assert.equal(gateFresh(root), true);
+});
+
+test("gate.json write failure returns ok:false", () => {
+  const root = project(js("console.log('ALL CHECKS PASSED')"));
+  fs.mkdirSync(path.join(root, ".darkforge", "gate.json"));
+  const r = runGate(root);
+  assert.equal(r.ok, false);
+  assert.match(r.output, /gate: cannot write \.darkforge\/gate\.json/);
+});

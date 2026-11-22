@@ -9,7 +9,7 @@ Project config lives in `.darkforge/config.json`. Only `schemaVersion` is requir
 | `project.ownerLanguage` | string | `"en"` | Language skills use when talking to the owner. |
 | `gate.command.windows` | string | `""` | Quality gate command on Windows. |
 | `gate.command.unix` | string | `""` | Quality gate command on macOS/Linux. |
-| `gate.successMarker` | string | `"ALL CHECKS PASSED"` | Text the gate output must contain to count as passed. |
+| `gate.successMarker` | string | `"ALL CHECKS PASSED"` | A line the gate stdout must contain, matched as a whole line after trimming whitespace, to count as passed. |
 | `gate.quiet` | boolean | `true` | Show only a short summary of passing gate output. |
 | `constraintsPath` | string | `"docs/plans/constraints.md"` | Project global-constraints file, relative to the project root. |
 | `riskAreas` | array | `[]` | Areas of the project that always route to high risk. |

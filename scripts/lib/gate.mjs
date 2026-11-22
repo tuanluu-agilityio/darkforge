@@ -16,6 +16,12 @@ function currentHead(root) {
   return r.code === 0 && head ? head : null;
 }
 
+/** True when the working tree has uncommitted or untracked changes outside .darkforge/. */
+function treeDirty(root) {
+  const r = run("git", ["status", "--porcelain", "--", ".", ":(exclude).darkforge"], { cwd: root });
+  return r.code === 0 && r.stdout.trim() !== "";
+}
+
 function lines(text) {
   return text.split(/\r?\n/).filter((l) => l.trim() !== "");
 }
@@ -37,7 +43,7 @@ export function runGate(root, opts = {}) {
 
   const r = runShell(command, { cwd: root });
   const marker = gate.successMarker;
-  const markerLine = lines(r.stdout).find((l) => l.includes(marker));
+  const markerLine = lines(r.stdout).find((l) => l.trim() === marker.trim());
   const ok = r.code === 0 && markerLine !== undefined;
 
   let output;
@@ -52,8 +58,15 @@ export function runGate(root, opts = {}) {
     output = body ? `${body}\n${why}` : why;
   }
 
-  fs.mkdirSync(path.join(root, ".darkforge"), { recursive: true });
-  fs.writeFileSync(gateFile(root), JSON.stringify({ head: currentHead(root), ok, at: new Date().toISOString() }, null, 2) + "\n");
+  const head = currentHead(root);
+  const dirty = head !== null && treeDirty(root);
+  if (dirty) output += `${output ? "\n" : ""}gate: tree has uncommitted changes; commit before merge`;
+  try {
+    fs.mkdirSync(path.join(root, ".darkforge"), { recursive: true });
+    fs.writeFileSync(gateFile(root), JSON.stringify({ head, ok, dirty, at: new Date().toISOString() }, null, 2) + "\n");
+  } catch (e) {
+    return { ok: false, output: `gate: cannot write .darkforge/gate.json: ${e.message}`, code: r.code };
+  }
   return { ok, output, code: r.code };
 }
 
@@ -65,9 +78,9 @@ export function gateFresh(root) {
   } catch {
     return false;
   }
-  if (!rec || rec.ok !== true || !rec.head) return false;
+  if (!rec || rec.ok !== true || !rec.head || rec.dirty !== false) return false;
   const head = currentHead(root);
-  return head !== null && head === rec.head;
+  return head !== null && head === rec.head && !treeDirty(root);
 }
 
 /** CLI handler: darkforge gate [--full] */

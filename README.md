@@ -38,6 +38,41 @@ No npm dependencies, no network access except `git` and `gh`, no telemetry.
 
 Read the [user guide](docs/user-guide.md), the [config reference](docs/config.md) and a [worked example](docs/example-dark-clipboard.md).
 
+## Workflow
+
+Each phase is planned once, built one task at a time and closed by a whole-phase review. `/darkforge:status` is read-only and can run at any point.
+
+```mermaid
+flowchart TD
+    init["/darkforge:init<br/>interview, config, memory bank"] --> plan
+    plan["/darkforge:plan-phase<br/>grill, phase plan, task packages"] --> next
+    next["/darkforge:next-task<br/>one task end to end"] -->|more tasks| next
+    next -->|all tasks merged| review
+    review["/darkforge:phase-review<br/>whole-phase review, exit checklist"] -->|next phase| plan
+```
+
+### One task (`/darkforge:next-task`)
+
+```mermaid
+flowchart TD
+    pick["1. Pick<br/>read activeContext and progress"] --> start
+    start["2. Start + routing<br/>task branch, agent and model by risk"] --> impl
+    impl["3. Implement<br/>builder / scaffolder / specialist, test-first"] --> rev
+    rev["4. Review<br/>a different agent, read-only"] -->|CHANGES REQUIRED| fix
+    fix["5. Fix rounds<br/>same implementer, defect lines only"] --> rev
+    rev -->|APPROVED| mem
+    mem["6. Memory bank<br/>progress, activeContext, decisions, backlog"] --> gate
+    gate["7. Gate<br/>on the exact commit that merges"] -->|fails| fix
+    gate -->|passes| merge
+    merge["8. Merge<br/>push, PR, wait for checks, merge"] --> report
+    report["9. Report<br/>token ledger for the task"]
+```
+
+- The model comes from `routing.<risk>` in `.darkforge/config.json`; a task that touches a `riskAreas` path is always `high`. Banned models are blocked by a hook.
+- After `escalation.raiseAfterFixRounds` fix rounds the model is raised one tier; after `escalation.askOwnerAfterFixRounds` the owner is asked.
+- `should-fix` review items do not block; they go to `memory-bank/backlog.md`.
+- The phase review is done by `security-reviewer` at the `high` reviewer model. Each `blocking` defect becomes a new fix task in the phase.
+
 ## Credits
 
 - [superpowers](https://github.com/obra/superpowers) by Jesse Vincent (MIT) inspired the skill-driven workflow. darkforge uses it when installed and works without it.

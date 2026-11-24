@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DarkForge · Engineering workflow for Claude Code</title>
+<meta name="theme-color" content="#09090B">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2230%22%20height%3D%2230%22%20rx%3D%228%22%20fill%3D%22%2318181B%22%20stroke%3D%22%233F3F46%22%2F%3E%3Cpath%20d%3D%22M8%2021h16v3H8z%22%20fill%3D%22%23FAFAFA%22%2F%3E%3Cpath%20d%3D%22M11%2017l5-9%205%209z%22%20fill%3D%22%23F97316%22%2F%3E%3Cpath%20d%3D%22M14%2017h4v4h-4z%22%20fill%3D%22%23FAFAFA%22%2F%3E%3C%2Fsvg%3E">
+<meta property="og:type" content="website">
+<meta property="og:title" content="DarkForge · Engineering workflow for Claude Code">
+<meta property="og:description" content="Phase plans, task packages, risk-based model routing, independent review, a quality gate, a memory bank and a token ledger for Claude Code.">
+<meta name="description" content="DarkForge is a Claude Code plugin for phase plans, task packages, risk-based model routing, independent review, a quality gate, a memory bank and a token ledger.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* VOICE  serious engineering product: calm, exact, heat only where work is happening
+   IDEA   a forge's work log: every step is a terminal line or a station on a pipeline
+   PICTURE hero terminal replaying one /darkforge:next-task run beside a live 9-step rail
+   COLOUR near-black #09090B, graphite #18181B, forge orange #F97316 for "in progress", green pass, red block
+   TYPE   Geist for display and text, JetBrains Mono for commands, files and logs
+   LAYOUT laptop: headline + facts, then terminal and rail full width; phone: stacked, rail as a list */
+:root{color-scheme:dark;--bg:#09090B;--s1:#111113;--s2:#18181B;--line:#27272A;--line2:#3F3F46;--ink:#FAFAFA;--mut:#A1A1AA;--dim:#8B8B94;--acc:#F97316;--ok:#22C55E;--warn:#EAB308;--err:#EF4444;--mono:"JetBrains Mono",ui-monospace,Consolas,monospace}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:72px;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 Geist,Inter,system-ui,sans-serif;overflow-x:clip}
+a{color:inherit;text-underline-offset:3px}
+code{font-family:var(--mono);font-size:.88em;color:var(--ink);overflow-wrap:anywhere}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:max(4vw,16px)}
+.band{padding-block:clamp(56px,7vw,104px);border-top:1px solid var(--line)}
+h1,h2,h3{margin:0;letter-spacing:-.02em;line-height:1.08;text-wrap:balance}
+h1{font-size:clamp(36px,5.6vw,64px);font-weight:600}
+h2{font-size:clamp(28px,3.6vw,42px);font-weight:600;max-width:24ch}
+h3{font-size:18px;font-weight:600;line-height:1.3}
+p{margin:0}
+.lead{color:var(--mut);font-size:18px;max-width:64ch;margin-top:14px}
+.note{font-size:13px;color:var(--dim)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:6px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:10px;border:1px solid var(--line2);background:var(--s2);color:var(--ink);font:500 15px Geist,sans-serif;text-decoration:none;cursor:pointer}
+.btn:hover{border-color:var(--mut)}
+.btn.pri{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.copy{min-height:32px;padding:0 10px;border-radius:7px;border:1px solid var(--line);background:var(--s2);color:var(--mut);font:12px var(--mono);cursor:pointer;flex:none}
+.copy.done{color:var(--ok);border-color:var(--ok)}
+.card{border:1px solid var(--line);border-radius:14px;background:var(--s1);padding:22px}
+.viz{border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:14px;font:12.5px/1.7 var(--mono);color:var(--mut);overflow-x:auto}
+/* nav */
+nav{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:20px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;text-decoration:none;font-size:17px}
+.links{display:flex;gap:20px;margin-left:auto;font-size:14px;color:var(--mut)}
+.links a{text-decoration:none}.links a:hover{color:var(--ink)}
+.lang{display:flex;border:1px solid var(--line2);border-radius:9px;overflow:hidden}
+.lang button{min-height:36px;min-width:40px;border:0;background:transparent;color:var(--mut);font:500 13px var(--mono);cursor:pointer}
+.lang button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+@media(max-width:980px){.links{display:none}.lang{margin-left:auto}}
+@media(max-width:420px){nav .btn{display:none}}
+/* hero */
+.hero{padding-block:clamp(40px,6vw,80px) clamp(56px,7vw,96px)}
+.hero-top{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:40px;align-items:end}
+.sub{font-size:20px;color:var(--ink);margin-top:16px}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.install{display:flex;align-items:center;gap:10px;border:1px solid var(--line2);border-radius:10px;background:var(--s1);padding:6px 6px 6px 14px;min-height:44px;font:14px var(--mono);max-width:100%}
+.install span{color:var(--dim)}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px}
+.facts div{background:var(--s1);padding:14px 16px}
+.facts b{display:block;font-weight:500}.facts span{color:var(--mut)}
+@media(max-width:860px){.hero-top{grid-template-columns:1fr}}
+.stage{margin-top:44px;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--s1);box-shadow:0 40px 120px -70px color-mix(in srgb,var(--acc) 55%,transparent)}
+.term{border-right:1px solid var(--line);display:flex;flex-direction:column}
+.bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);font:12px var(--mono);color:var(--dim)}
+.bar i{width:10px;height:10px;border-radius:50%;background:var(--line2)}
+.bar .tag{margin-left:auto;border:1px solid var(--line2);border-radius:99px;padding:2px 9px;color:var(--mut);white-space:nowrap}
+#log{margin:0;padding:16px 18px;font:13px/1.75 var(--mono);color:var(--mut);white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;height:470px}
+#log .c{color:var(--ink)}#log .o{color:var(--acc)}#log .g{color:var(--ok)}#log .r{color:var(--err)}#log .d{color:var(--dim)}
+.rail{padding:18px;display:flex;flex-direction:column;gap:3px}
+.rail h3{font-size:13px;color:var(--dim);font-weight:500;margin-bottom:8px;font-family:var(--mono)}
+.st{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 8px;border-radius:8px;font-size:14px;color:var(--dim);transition:background .2s,color .2s}
+.st .dot{width:12px;height:12px;border-radius:50%;border:2px solid var(--line2);justify-self:center}
+.st small{font:11px var(--mono);color:var(--warn)}
+.st.on{background:var(--s2);color:var(--ink)}.st.on .dot{border-color:var(--acc);background:var(--acc);box-shadow:0 0 0 4px color-mix(in srgb,var(--acc) 25%,transparent)}
+.st.ok{color:var(--mut)}.st.ok .dot{border-color:var(--ok);background:var(--ok)}
+.st.bad .dot{border-color:var(--err);background:var(--err)}
+.ctl{display:flex;gap:8px;margin-top:auto;padding-top:14px}
+.ctl .btn{min-height:40px;font-size:13px;padding:0 12px;flex:1}
+@media(max-width:860px){.stage{grid-template-columns:1fr}.term{border-right:0;border-bottom:1px solid var(--line)}#log{height:360px}}
+/* problem */
+.split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:36px}
+.col h3{display:flex;justify-content:space-between;gap:8px;margin-bottom:16px}
+.col h3 small{font:12px var(--mono);color:var(--dim);font-weight:400}
+.col ol{margin:0;padding:0;list-style:none;display:grid;gap:10px}
+.col li{position:relative;padding-left:24px;font-size:15px;color:var(--mut)}
+.col li::before{content:"";position:absolute;left:0;top:7px;width:10px;height:10px;border-radius:2px;background:var(--err)}
+.col.good{border-color:color-mix(in srgb,var(--acc) 40%,var(--line))}
+.col.good li::before{background:var(--ok);border-radius:50%}
+@media(max-width:760px){.split{grid-template-columns:1fr}}
+/* project lifecycle */
+.proj{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;margin-top:36px;position:relative}
+.proj .ph{position:relative;padding:0 12px 0 0}
+.proj .ph::before{content:"";position:absolute;top:21px;left:44px;right:0;height:2px;background:var(--line2)}
+.proj .ph:last-child::before{display:none}
+.proj .n{position:relative;width:44px;height:44px;border-radius:12px;border:1px solid var(--line2);background:var(--s2);display:grid;place-items:center;font:500 14px var(--mono)}
+.proj .ph.hot .n{border-color:var(--acc);color:var(--acc)}
+.proj b{display:block;margin-top:12px;font-weight:600}
+.proj code{display:block;margin-top:4px;font-size:12px;color:var(--acc)}
+.proj p{font-size:14px;color:var(--mut);margin-top:6px}
+.loopback{margin-top:16px;border:1px dashed var(--line2);border-radius:10px;padding:10px 14px;font-size:14px;color:var(--mut)}
+@media(max-width:860px){.proj{grid-template-columns:1fr;gap:18px}.proj .ph{display:grid;grid-template-columns:44px minmax(0,1fr);column-gap:14px;padding:0}.proj .ph::before{top:44px;bottom:-18px;left:21px;right:auto;width:2px;height:auto}.proj b{margin-top:0}.proj .ph>*:not(.n){grid-column:2}.proj .n{grid-row:1/span 3}}
+/* task lifecycle */
+.life{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px;margin-top:28px}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.steps button{text-align:left;min-height:72px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--s1);color:var(--ink);font:500 15px Geist,sans-serif;cursor:pointer}
+.steps button small{display:block;font:12px var(--mono);color:var(--dim);margin-top:4px}
+.steps button[aria-selected=true]{border-color:var(--acc);background:var(--s2)}
+.steps button.loop small{color:var(--warn)}
+.detail{display:flex;flex-direction:column;gap:14px}
+.detail dl{display:grid;grid-template-columns:7em minmax(0,1fr);gap:8px 14px;margin:0;font-size:14px}
+.detail dt{color:var(--dim)}.detail dd{margin:0;color:var(--mut)}
+@media(max-width:860px){.life{grid-template-columns:1fr}.steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* bento */
+.bento{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px;margin-top:36px}
+.cell{display:flex;flex-direction:column;gap:12px}
+.cell>p{color:var(--mut);font-size:15px}
+.cell .how{font-size:13px;color:var(--dim);border-top:1px solid var(--line);padding-top:10px;margin-top:auto}
+.w2{grid-column:span 2}.w3{grid-column:span 3}.w4{grid-column:span 4}
+@media(max-width:980px){.w2,.w3,.w4{grid-column:span 6}}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{min-height:38px;padding:0 14px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--mut);font:500 13px Geist,sans-serif;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.route{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.route div{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--s1)}
+.route span{display:block;color:var(--dim);font-size:11px}
+.route b{color:var(--ink);font-weight:500;font-size:13px}
+.route .ex{grid-column:1/-1}
+@media(max-width:520px){.route{grid-template-columns:1fr}}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.pill{border:1px solid var(--line2);border-radius:8px;padding:6px 10px;color:var(--ink);background:var(--s1);white-space:nowrap}
+.pill.r{border-color:var(--err);color:var(--err)}.pill.g{border-color:var(--ok);color:var(--ok)}.pill.o{border-color:var(--acc);color:var(--acc)}
+.arr{color:var(--dim)}
+.gate{display:grid;gap:6px}
+.gate div{display:flex;justify-content:space-between;gap:10px}
+.gate .k{color:var(--ok)}.gate .x{color:var(--err)}
+.mb{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.mb span{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:12px var(--mono);color:var(--dim);overflow-wrap:anywhere}
+.mb span.hot{color:var(--ink);border-color:var(--acc)}
+.ledger{display:grid;gap:8px}
+.lrow{display:grid;grid-template-columns:6.5em minmax(0,1fr) 4.5em;gap:10px;align-items:center;font:12.5px var(--mono);color:var(--mut)}
+.lrow i{display:block;height:10px;border-radius:3px;background:var(--line2)}
+.lrow.top i{background:var(--acc)}
+.lrow em{font-style:normal;text-align:right;white-space:nowrap}
+.gitsvg{width:100%;height:auto;display:block}
+.gitsvg text{font:12px var(--mono);fill:var(--mut)}
+/* why */
+.why{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;margin-top:36px}
+.why .card{display:grid;gap:10px;align-content:start}
+.why .m{font:13px var(--mono);color:var(--acc)}
+.why p{color:var(--mut);font-size:15px}
+/* sessions */
+.sess{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr) minmax(0,1fr);gap:16px;margin-top:36px;align-items:stretch}
+.sess .card{display:flex;flex-direction:column;gap:10px}
+.sess h3 small{display:block;font:12px var(--mono);color:var(--dim);font-weight:400;margin-top:4px}
+.sess .mid{border-style:dashed;background:transparent}
+.ended{color:var(--err);font:12.5px var(--mono)}
+@media(max-width:860px){.sess{grid-template-columns:1fr}}
+/* quick start */
+.qs{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;margin-top:32px;align-items:start}
+.cmds{display:grid;gap:8px;counter-reset:c}
+.cmd{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;border:1px solid var(--line);border-radius:10px;background:var(--s1);padding:10px 10px 10px 14px}
+.cmd code{font-size:14px}
+.cmd p{grid-column:1/-1;font-size:13px;color:var(--dim)}
+.req{margin:0;padding:0;list-style:none;display:grid;gap:10px;font-size:15px;color:var(--mut)}
+.req li{border-bottom:1px solid var(--line);padding-bottom:10px}
+.req b{color:var(--ink);font-weight:500}
+.modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:18px}
+.modes .card{padding:16px;font-size:14px;color:var(--mut)}
+.modes h3{font-size:15px;margin-bottom:6px}
+@media(max-width:860px){.qs{grid-template-columns:1fr}}
+@media(max-width:520px){.modes{grid-template-columns:1fr}}
+/* origins */
+.orig{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:28px;margin-top:32px;align-items:start}
+.orig p{color:var(--mut)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font-weight:500;font-size:13px}
+td:first-child{color:var(--mut)}
+@media(max-width:860px){.orig{grid-template-columns:1fr}}
+@media(max-width:600px){.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{border:0;padding:3px 0}.stack td::before{content:attr(data-l);display:block;font-size:12px;color:var(--dim)}}
+/* faq */
+.faq{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;margin-top:32px;align-items:start}
+details{border-bottom:1px solid var(--line)}
+summary{cursor:pointer;list-style:none;padding:16px 32px 16px 0;font-weight:500;position:relative;min-height:44px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";position:absolute;right:4px;top:14px;font:18px var(--mono);color:var(--dim)}
+details[open] summary::after{content:"−"}
+details p{color:var(--mut);padding-bottom:16px;font-size:15px}
+.limits ul{margin:10px 0 0;padding-left:18px;color:var(--mut);font-size:14px;display:grid;gap:8px}
+@media(max-width:860px){.faq{grid-template-columns:1fr}}
+/* releases */
+.rel{display:grid;grid-template-columns:minmax(0,220px) minmax(0,1fr);gap:28px;margin-top:32px}
+.rel-list{display:grid;gap:8px;align-content:start}
+.rel-list button{display:flex;justify-content:space-between;gap:10px;align-items:center;min-height:52px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--s1);color:var(--ink);font:500 15px Geist,sans-serif;cursor:pointer;text-align:left}
+.rel-list button small{font:12px var(--mono);color:var(--dim)}
+.rel-list button[aria-selected=true]{border-color:var(--acc);background:var(--s2)}
+.latest{font:11px var(--mono);color:var(--acc);border:1px solid color-mix(in srgb,var(--acc) 45%,transparent);border-radius:99px;padding:1px 8px;margin-left:6px}
+.rel-body h3{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:baseline}
+.rel-body h3 small{font:13px var(--mono);color:var(--dim);font-weight:400}
+.rel-body h4{margin:18px 0 8px;font-size:14px;font-weight:600;display:flex;gap:8px;align-items:center}
+.rel-body h4 i{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.rel-body h4.k i{background:var(--warn)}
+.rel-body ul{margin:0;padding-left:18px;color:var(--mut);font-size:15px;display:grid;gap:6px}
+@media(max-width:760px){.rel{grid-template-columns:1fr}.rel-list{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
+/* final cta + footer */
+.final{text-align:left;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:center}
+@media(max-width:760px){.final{grid-template-columns:1fr}}
+footer{border-top:1px solid var(--line);padding-block:36px;color:var(--dim);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:16px 28px;justify-content:space-between}
+footer nav{all:unset;display:flex;flex-wrap:wrap;gap:16px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<nav aria-label="Main">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="DarkForge">
+      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#18181B" stroke="#3F3F46"/><path d="M8 21h16v3H8z" fill="#FAFAFA"/><path d="M11 17l5-9 5 9z" fill="#F97316"/><path d="M14 17h4v4h-4z" fill="#FAFAFA"/></svg>
+      DarkForge
+    </a>
+    <div class="links">
+      <a href="#how" data-t="navHow"></a><a href="#features" data-t="navFeat"></a><a href="#why" data-t="navWhy"></a><a href="#start" data-t="navStart"></a><a href="#faq">FAQ</a><a href="#releases">Changelog</a><a href="https://github.com/tuanluu-agilityio/darkforge">GitHub</a>
+    </div>
+    <div class="lang" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="vi">VI</button></div>
+    <a class="btn pri" href="#start" data-t="getStarted"></a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div class="hero-top">
+      <div>
+        <h1 data-t="h1"></h1>
+        <p class="sub" data-t="sub"></p>
+        <p class="lead" data-t="heroLead"></p>
+        <div class="cta">
+          <div class="install"><span>&gt;</span><code id="i1">/plugin marketplace add tuanluu-agilityio/darkforge</code><button class="copy" data-copy="i1">Copy</button></div>
+          <a class="btn" href="https://github.com/tuanluu-agilityio/darkforge">GitHub</a>
+        </div>
+      </div>
+      <div class="facts" id="facts"></div>
+    </div>
+    <div class="stage">
+      <div class="term">
+        <div class="bar"><i></i><i></i><i></i>&nbsp;claude · my-app<span class="tag" data-t="illus"></span></div>
+        <pre id="log" aria-label="Illustrative terminal replay"></pre>
+      </div>
+      <div class="rail">
+        <h3>/darkforge:next-task</h3>
+        <div id="rail"></div>
+        <div class="ctl"><button class="btn" id="play"></button><button class="btn" id="step" data-t="step"></button><button class="btn" id="reset" data-t="replay"></button></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="band" id="problem">
+  <div class="wrap">
+    <h2 data-t="probH"></h2>
+    <p class="lead" data-t="probLead"></p>
+    <div class="split">
+      <div class="card col"><h3><span data-t="probBad"></span><small data-t="illusSmall"></small></h3><ol id="bad"></ol></div>
+      <div class="card col good"><h3><span data-t="probGood"></span><small data-t="fromGuide"></small></h3><ol id="good"></ol></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="how">
+  <div class="wrap">
+    <h2 data-t="howH"></h2>
+    <p class="lead" data-t="howLead"></p>
+    <div class="proj" id="proj"></div>
+    <p class="loopback" data-t="loopback"></p>
+    <h3 style="margin-top:56px;font-size:24px" data-t="taskH"></h3>
+    <div class="life">
+      <div class="steps" role="tablist" aria-label="Task lifecycle" id="steps"></div>
+      <div class="card detail" role="tabpanel" id="detail" aria-live="polite"></div>
+    </div>
+    <p class="note" style="margin-top:14px" data-t="taskNote"></p>
+  </div>
+</section>
+
+<section class="band" id="features">
+  <div class="wrap">
+    <h2 data-t="featH"></h2>
+    <div class="bento">
+      <article class="card cell w4">
+        <h3 data-t="fRoute"></h3><p data-t="fRouteP"></p>
+        <div class="viz"><div class="seg" role="group" aria-label="Risk" id="seg"></div><div class="route" id="route"></div></div>
+        <p class="how" data-t="fRouteHow"></p>
+      </article>
+      <article class="card cell w2">
+        <h3 data-t="fGuard"></h3><p data-t="fGuardP"></p>
+        <div class="viz"><span style="color:var(--err)">deny</span> darkforge model-guard: model "haiku" is below the floor "sonnet" for darkforge:security-reviewer (models.floors). Retry with "sonnet" or a higher tier.</div>
+        <p class="how" data-t="fGuardHow"></p>
+      </article>
+      <article class="card cell w3">
+        <h3 data-t="fReview"></h3><p data-t="fReviewP"></p>
+        <div class="viz"><div class="flow"><span class="pill">builder</span><span class="arr">→</span><span class="pill">reviewer</span><span class="arr">→</span><span class="pill r">CHANGES REQUIRED</span><span class="arr">→</span><span class="pill o">fix round 1</span><span class="arr">→</span><span class="pill g">APPROVED</span></div><div style="margin-top:10px" data-t="fReviewEsc"></div></div>
+        <p class="how" data-t="fReviewHow"></p>
+      </article>
+      <article class="card cell w3">
+        <h3 data-t="fGate"></h3><p data-t="fGateP"></p>
+        <div class="viz gate"><div><span>df gate</span><span class="x">gate: FAILED (exit 1)</span></div><div><span data-t="fGateFix"></span><span class="arr">↺</span></div><div><span>df gate</span><span class="k">ALL CHECKS PASSED</span></div><div><span>df task merge 014</span><span class="k">HEAD = gated commit</span></div></div>
+        <p class="how" data-t="fGateHow"></p>
+      </article>
+      <article class="card cell w2">
+        <h3 data-t="fMem"></h3><p data-t="fMemP"></p>
+        <div class="mb"><span class="hot">activeContext.md</span><span class="hot">progress.md</span><span>decisions.md</span><span>backlog.md</span><span>projectbrief.md</span><span>systemPatterns.md</span><span>techContext.md</span></div>
+        <p class="how" data-t="fMemHow"></p>
+      </article>
+      <article class="card cell w4">
+        <h3 data-t="fLedger"></h3><p data-t="fLedgerP"></p>
+        <div class="viz"><div class="ledger" id="ledger"></div></div>
+        <p class="how" data-t="fLedgerHow"></p>
+      </article>
+      <article class="card cell w3">
+        <h3 data-t="fGit"></h3><p data-t="fGitP"></p>
+        <div class="viz">
+          <svg class="gitsvg" viewBox="0 0 420 120" role="img" aria-label="Task branch merged through a pull request">
+            <line x1="10" y1="92" x2="410" y2="92" stroke="#3F3F46" stroke-width="2"/>
+            <path d="M70 92 C100 92 100 38 130 38 L290 38 C320 38 320 92 350 92" fill="none" stroke="#F97316" stroke-width="2"/>
+            <g fill="#09090B" stroke-width="2"><circle cx="70" cy="92" r="6" stroke="#A1A1AA"/><circle cx="160" cy="38" r="6" stroke="#F97316"/><circle cx="210" cy="38" r="6" stroke="#F97316"/><circle cx="260" cy="38" r="6" stroke="#F97316"/><circle cx="350" cy="92" r="7" stroke="#22C55E" fill="#22C55E"/></g>
+            <text x="12" y="112">main</text><text x="140" y="20">task/014-add-export-csv</text><text x="300" y="112">PR + checks</text>
+          </svg>
+        </div>
+        <p class="how" data-t="fGitHow"></p>
+      </article>
+      <article class="card cell w3">
+        <h3 data-t="fSp"></h3><p data-t="fSpP"></p>
+        <div class="viz"><div class="flow"><span class="pill">superpowers plan</span><span class="arr">→</span><span class="pill o">/darkforge:plan-phase</span><span class="arr">→</span><span class="pill">docs/tasks/*.md</span></div><div style="margin-top:10px" data-t="fSpTdd"></div></div>
+        <p class="how" data-t="fSpHow"></p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="why">
+  <div class="wrap">
+    <h2 data-t="whyH"></h2>
+    <p class="lead" data-t="whyLead"></p>
+    <div class="why" id="whyList"></div>
+  </div>
+</section>
+
+<section class="band" id="memory">
+  <div class="wrap">
+    <h2 data-t="sessH"></h2>
+    <p class="lead" data-t="sessLead"></p>
+    <div class="sess">
+      <div class="card"><h3><span data-t="s1"></span><small data-t="mon"></small></h3><div class="viz" id="s1log"></div><p class="ended" data-t="s1end"></p></div>
+      <div class="card mid"><h3 data-t="sMid"></h3><div class="mb" style="grid-template-columns:1fr"><span class="hot">memory-bank/activeContext.md</span><span class="hot">memory-bank/progress.md</span><span>.darkforge/state.json</span></div><p class="note" data-t="sMidNote"></p></div>
+      <div class="card"><h3><span data-t="s2"></span><small data-t="tue"></small></h3><div class="viz">darkforge project: my-app<br>current task: 014-add-export-csv<br>use /darkforge:status or /darkforge:next-task</div><p class="note" data-t="s2note"></p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="start">
+  <div class="wrap">
+    <h2 data-t="qsH"></h2>
+    <div class="qs">
+      <div><p class="note" style="margin-bottom:12px" data-t="qsSlash"></p><div class="cmds" id="cmds"></div></div>
+      <div>
+        <ul class="req" id="req"></ul>
+        <div class="modes">
+          <div class="card"><h3 data-t="mPr"></h3><p data-t="mPrP"></p></div>
+          <div class="card"><h3 data-t="mLocal"></h3><p data-t="mLocalP"></p></div>
+        </div>
+        <p class="note" style="margin-top:14px" data-t="doctor"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="origins">
+  <div class="wrap">
+    <h2 data-t="origH"></h2>
+    <div class="orig">
+      <div><p data-t="origP"></p><p style="margin-top:14px" data-t="origP2"></p><p class="note" style="margin-top:14px"><a href="https://github.com/tuanluu-agilityio/darkforge/blob/main/docs/example-dark-clipboard.md" data-t="origLink"></a></p></div>
+      <div class="scroll"><table class="stack"><thead><tr><th data-t="byHand"></th><th>DarkForge</th></tr></thead><tbody id="origT"></tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="faq">
+  <div class="wrap">
+    <h2 data-t="faqH"></h2>
+    <div class="faq">
+      <div id="faqList"></div>
+      <aside class="card limits"><h3 data-t="limH"></h3><ul id="lim"></ul><p class="note" style="margin-top:14px"><a href="https://github.com/tuanluu-agilityio/darkforge/blob/main/docs/user-guide.md#known-limits" data-t="limLink"></a></p></aside>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="releases">
+  <div class="wrap">
+    <h2 data-t="relH"></h2>
+    <p class="lead" data-t="relLead"></p>
+    <div class="rel"><div class="rel-list" role="tablist" aria-label="Releases" id="relList"></div><div class="card rel-body" role="tabpanel" id="relBody" aria-live="polite"></div></div>
+    <p class="note" style="margin-top:14px"><a href="https://github.com/tuanluu-agilityio/darkforge/blob/main/CHANGELOG.md" data-t="relLink"></a></p>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap final">
+    <div><h2 data-t="finalH"></h2><p class="lead" data-t="finalP"></p></div>
+    <div class="install"><span>&gt;</span><code id="i2">/plugin install darkforge@darkforge</code><button class="copy" data-copy="i2">Copy</button></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span data-t="foot"></span>
+    <nav aria-label="Footer"><a href="https://github.com/tuanluu-agilityio/darkforge">GitHub</a><a href="https://github.com/tuanluu-agilityio/darkforge/blob/main/docs/user-guide.md" data-t="guide"></a><a href="https://github.com/tuanluu-agilityio/darkforge/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/tuanluu-agilityio/darkforge/blob/main/LICENSE">MIT License</a></nav>
+  </div>
+</footer>
+
+<script>
+{
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let lang="en";
+const L=o=>typeof o==="string"?o:o[lang];
+
+/* ---------- static text ---------- */
+const T={
+navHow:{en:"How it works",vi:"Cách hoạt động"},navFeat:{en:"Features",vi:"Tính năng"},navWhy:{en:"Why it works",vi:"Vì sao hiệu quả"},navStart:{en:"Get started",vi:"Bắt đầu"},
+getStarted:{en:"Get started",vi:"Bắt đầu"},
+h1:{en:"Turn AI coding into disciplined engineering.",vi:"Biến AI coding thành kỹ thuật phần mềm có kỷ luật."},
+sub:{en:"Plan in phases. Route models by risk. Review independently. Merge only what passed.",vi:"Lập kế hoạch theo phase. Chọn model theo rủi ro. Review độc lập. Chỉ merge những gì đã qua kiểm tra."},
+heroLead:{en:"DarkForge is a plugin for Claude Code. It splits a project into phases and small task packages; each task is built on its own branch by one agent, reviewed by another, checked by your quality gate and merged. A short memory bank lets every new session pick up where the last one stopped.",vi:"DarkForge là plugin cho Claude Code. Nó chia dự án thành các phase và task package nhỏ; mỗi task được một agent làm trên branch riêng, một agent khác review, quality gate của bạn kiểm tra rồi mới merge. Memory bank ngắn gọn giúp mỗi phiên mới tiếp tục đúng chỗ phiên trước dừng lại."},
+illus:{en:"Illustrative replay",vi:"Mô phỏng minh họa"},step:{en:"Step",vi:"Từng bước"},replay:{en:"Replay",vi:"Chạy lại"},
+probH:{en:"Long AI sessions drift. DarkForge keeps each one small and checkable.",vi:"Phiên AI dài dễ bị trôi. DarkForge giữ mỗi phiên nhỏ và kiểm chứng được."},
+probLead:{en:"Not every Claude Code session has these problems. They appear on long, multi-week projects when nobody holds the process.",vi:"Không phải phiên Claude Code nào cũng gặp những vấn đề này. Chúng xuất hiện ở dự án dài nhiều tuần, khi không ai giữ quy trình."},
+probBad:{en:"Unstructured session",vi:"Phiên không có quy trình"},probGood:{en:"DarkForge-managed",vi:"Có DarkForge quản lý"},
+illusSmall:{en:"illustrative",vi:"minh họa"},fromGuide:{en:"from the user guide",vi:"theo user guide"},
+howH:{en:"A project runs in phases. A phase runs as tasks.",vi:"Dự án chạy theo phase. Mỗi phase chạy theo task."},
+howLead:{en:"Five slash commands cover the whole loop. The mechanical parts (branches, gate, merge, ledger, lint) are a Node CLI; the judgment parts are skills the main session follows.",vi:"Năm slash command bao trọn vòng lặp. Phần cơ học (branch, gate, merge, ledger, lint) là một Node CLI; phần cần phán đoán là các skill mà phiên chính làm theo."},
+loopback:{en:"↺ After a phase review, plan the next phase and repeat. <code>/darkforge:status</code> is read-only and works at any point.",vi:"↺ Sau khi review phase, lập kế hoạch phase tiếp theo và lặp lại. <code>/darkforge:status</code> chỉ đọc, dùng lúc nào cũng được."},
+taskH:{en:"Inside /darkforge:next-task: nine steps, two loops.",vi:"Bên trong /darkforge:next-task: chín bước, hai vòng lặp."},
+taskNote:{en:"Sequence from <code>skills/next-task/SKILL.md</code>. Select a step, or use the arrow keys.",vi:"Trình tự lấy từ <code>skills/next-task/SKILL.md</code>. Chọn một bước, hoặc dùng phím mũi tên."},
+featH:{en:"A workflow layer for Claude Code, not a replacement for it.",vi:"Một lớp quy trình cho Claude Code, không thay thế Claude Code."},
+fRoute:{en:"Risk-based model routing",vi:"Chọn model theo rủi ro"},
+fRouteP:{en:"Each task has a risk level. The project's <code>routing</code> maps it to an implementer and a reviewer, each with an agent and a model. Anything in <code>riskAreas</code> is always high.",vi:"Mỗi task có mức rủi ro. <code>routing</code> của dự án gán nó cho một implementer và một reviewer, mỗi bên có agent và model riêng. Mọi thứ thuộc <code>riskAreas</code> luôn là rủi ro cao."},
+fRouteHow:{en:"Default routing from <code>docs/config.md</code>. Every agent and model here is configurable.",vi:"Routing mặc định lấy từ <code>docs/config.md</code>. Mọi agent và model ở đây đều cấu hình được."},
+fGuard:{en:"Model guard",vi:"Model guard"},
+fGuardP:{en:"A PreToolUse hook checks every <code>Agent</code> call: banned models, missing <code>model</code>, and per-agent floors.",vi:"Một hook PreToolUse kiểm tra mọi lệnh gọi <code>Agent</code>: model bị cấm, thiếu <code>model</code>, và mức model tối thiểu cho từng agent."},
+fGuardHow:{en:"A denial names the rule and the fix. Outside a DarkForge project every hook does nothing.",vi:"Mỗi lần từ chối đều nêu rõ quy tắc và cách sửa. Ngoài dự án DarkForge, các hook không làm gì cả."},
+fReview:{en:"Independent review and fix rounds",vi:"Review độc lập và vòng sửa lỗi"},
+fReviewP:{en:"The reviewer is a different, read-only agent that checks the branch against the task package and the project constraints. Blocking defects go back to the same implementer as short lines.",vi:"Reviewer là một agent khác, chỉ đọc, kiểm tra branch so với task package và các ràng buộc của dự án. Lỗi chặn được gửi lại đúng implementer đó dưới dạng vài dòng ngắn."},
+fReviewEsc:{en:"After 2 failed fix rounds the implementer moves up one model tier; after 3 the session stops and asks you.",vi:"Sau 2 vòng sửa không qua, implementer được nâng lên một bậc model; sau 3 vòng, phiên dừng lại và hỏi bạn."},
+fReviewHow:{en:"A second reviewer can catch what the author misses. It does not guarantee correctness or security.",vi:"Một reviewer thứ hai có thể bắt được lỗi mà người viết bỏ sót. Điều đó không đảm bảo code đúng hay an toàn tuyệt đối."},
+fGate:{en:"Quality gate on the exact commit",vi:"Quality gate trên đúng commit được merge"},
+fGateP:{en:"Your own gate command must exit 0 and print the success marker. <code>task merge</code> refuses if HEAD moved since the gate passed.",vi:"Lệnh gate của bạn phải thoát với mã 0 và in ra dòng báo thành công. <code>task merge</code> từ chối nếu HEAD đã đổi kể từ lúc gate pass."},
+fGateFix:{en:"failing lines → fix round",vi:"dòng lỗi → vòng sửa"},
+fGateHow:{en:"Quiet by default: only failing lines or the marker. Gate skeletons for <code>check.ps1</code> / <code>check.sh</code> are optional.",vi:"Mặc định gọn: chỉ in dòng lỗi hoặc dòng báo thành công. Khung <code>check.ps1</code> / <code>check.sh</code> là tùy chọn."},
+fMem:{en:"Memory bank",vi:"Memory bank"},
+fMemP:{en:"Current state only. A new session reads the two highlighted files; the rest load when a task needs them.",vi:"Chỉ giữ trạng thái hiện tại. Phiên mới đọc hai file được tô sáng; các file còn lại chỉ nạp khi task cần."},
+fMemHow:{en:"<code>darkforge memory lint</code> must print <code>memory: ok</code> before a merge.",vi:"<code>darkforge memory lint</code> phải in <code>memory: ok</code> trước khi merge."},
+fLedger:{en:"Token ledger",vi:"Token ledger"},
+fLedgerP:{en:"Hooks on SubagentStop and Stop record tokens per task, phase, model and agent, and split orchestrator from subagents.",vi:"Hook trên SubagentStop và Stop ghi token theo task, phase, model và agent, tách riêng phần orchestrator và subagent."},
+fLedgerHow:{en:"Sample task, illustrative numbers. Best effort, not a billing report: totals include cache reads, which bill far cheaper.",vi:"Task mẫu, số liệu minh họa. Ghi nhận ở mức tốt nhất có thể, không phải báo cáo tính tiền: tổng có gồm cache read, vốn tính phí rẻ hơn nhiều."},
+fGit:{en:"Git and pull-request flow",vi:"Quy trình Git và pull request"},
+fGitP:{en:"One task, one branch. <code>task merge</code> pushes, opens the PR, waits for required checks and merges. Without <code>gh</code>, tasks merge locally.",vi:"Một task, một branch. <code>task merge</code> push, mở PR, chờ các check bắt buộc rồi merge. Không có <code>gh</code> thì task được merge local."},
+fGitHow:{en:"With <code>git.autoMerge: true</code> the PR is handed to GitHub auto-merge, and the next task checks it landed.",vi:"Với <code>git.autoMerge: true</code>, PR được giao cho auto-merge của GitHub, và task kế tiếp sẽ kiểm tra nó đã merge chưa."},
+fSp:{en:"Works with Superpowers, needs nothing",vi:"Chạy cùng Superpowers, không bắt buộc"},
+fSpP:{en:"DarkForge works standalone. With <code>superpowers: \"auto\"</code> and the superpowers plugin installed, it reuses its plans and TDD skill.",vi:"DarkForge chạy độc lập. Với <code>superpowers: \"auto\"</code> và plugin superpowers đã cài, nó dùng lại plan và skill TDD của superpowers."},
+fSpTdd:{en:"Implementers load superpowers' test-driven-development skill when available.",vi:"Implementer nạp skill test-driven-development của superpowers khi có."},
+fSpHow:{en:"Set <code>superpowers</code> to <code>\"off\"</code> to ignore it. Credit: superpowers by Jesse Vincent (MIT).",vi:"Đặt <code>superpowers</code> là <code>\"off\"</code> để bỏ qua. Ghi công: superpowers của Jesse Vincent (MIT)."},
+whyH:{en:"Why it works: every mechanism removes one way a long session goes wrong.",vi:"Vì sao hiệu quả: mỗi cơ chế loại bỏ một cách khiến phiên dài đi sai."},
+whyLead:{en:"No benchmarks here, because none have been measured. These are the reasons the design holds up.",vi:"Ở đây không có benchmark, vì chưa có số đo nào. Đây là lý do thiết kế này đứng vững."},
+sessH:{en:"Stop on Monday. Continue on Tuesday.",vi:"Dừng hôm thứ Hai. Tiếp tục hôm thứ Ba."},
+sessLead:{en:"State lives in files, not in a chat. A new session gets a three-line brief and reads two short files.",vi:"Trạng thái nằm trong file, không nằm trong cuộc chat. Phiên mới nhận bản tóm tắt ba dòng và đọc hai file ngắn."},
+s1:{en:"Session 1",vi:"Phiên 1"},s1end:{en:"✕ Claude Code closed during review",vi:"✕ Đóng Claude Code giữa lúc review"},
+sMid:{en:"What survives",vi:"Những gì còn lại"},
+sMidNote:{en:"Committed files plus the current task in local state. activeContext.md stays under 60 lines.",vi:"Các file đã commit cùng task hiện tại trong state local. activeContext.md luôn dưới 60 dòng."},
+s2:{en:"Session 2",vi:"Phiên 2"},
+s2note:{en:"The SessionStart hook adds this brief. <code>next-task</code> stays on the branch and continues from the first step not yet done.",vi:"Hook SessionStart thêm bản tóm tắt này. <code>next-task</code> ở lại branch cũ và tiếp tục từ bước đầu tiên chưa làm."},
+qsH:{en:"Install in Claude Code, then let init interview you.",vi:"Cài trong Claude Code, rồi để init phỏng vấn bạn."},
+qsSlash:{en:"Lines starting with <code>/</code> are Claude Code slash commands, typed in Claude Code, not in your shell.",vi:"Các dòng bắt đầu bằng <code>/</code> là slash command của Claude Code, gõ trong Claude Code, không phải trong shell."},
+mPr:{en:"Pull-request flow",vi:"Quy trình pull request"},
+mPrP:{en:"Default. Needs <code>gh</code>, authenticated. List expected CI checks in <code>git.requiredChecks</code> and mark them required in branch protection.",vi:"Mặc định. Cần <code>gh</code> đã đăng nhập. Liệt kê các CI check cần có trong <code>git.requiredChecks</code> và đánh dấu bắt buộc trong branch protection."},
+mLocal:{en:"Local merge",vi:"Merge local"},
+mLocalP:{en:"Set <code>git.prFlow: false</code> or <code>git.remote: null</code>. With a remote, the base branch is pulled before and pushed after each merge.",vi:"Đặt <code>git.prFlow: false</code> hoặc <code>git.remote: null</code>. Nếu có remote, base branch được pull trước và push sau mỗi lần merge."},
+doctor:{en:"Shell check: <code>node \"&lt;plugin dir&gt;/scripts/darkforge.mjs\" doctor</code> verifies Node, git and gh.",vi:"Kiểm tra trong shell: <code>node \"&lt;plugin dir&gt;/scripts/darkforge.mjs\" doctor</code> kiểm tra Node, git và gh."},
+origH:{en:"Built from a real project's process.",vi:"Ra đời từ quy trình của một dự án thật."},
+origP:{en:"DarkForge packages a process first run by hand on Dark Clipboard, a local-first clipboard manager in Rust for Windows, macOS and Linux, by the author of this plugin.",vi:"DarkForge đóng gói một quy trình từng được làm thủ công trên Dark Clipboard, trình quản lý clipboard local-first viết bằng Rust cho Windows, macOS và Linux, do chính tác giả plugin này phát triển."},
+origP2:{en:"That project used a hand-written CLAUDE.md, a memory bank, numbered constraints, phase plans, task packages and project agents. DarkForge turns those habits into commands, hooks and generic agents that read your project's config.",vi:"Dự án đó dùng CLAUDE.md viết tay, memory bank, các ràng buộc đánh số, phase plan, task package và agent riêng. DarkForge biến những thói quen đó thành lệnh, hook và agent dùng chung, đọc theo cấu hình của dự án bạn."},
+origLink:{en:"Read the worked example →",vi:"Đọc ví dụ chi tiết →"},
+byHand:{en:"By hand",vi:"Làm thủ công"},
+faqH:{en:"Questions",vi:"Câu hỏi thường gặp"},
+limH:{en:"Known limitations",vi:"Giới hạn đã biết"},limLink:{en:"All known limits in the user guide →",vi:"Toàn bộ giới hạn trong user guide →"},
+relH:{en:"What changed in each release.",vi:"Thay đổi trong từng bản phát hành."},
+relLead:{en:"Generated from <code>CHANGELOG.md</code> at deploy time, so this list always matches the repository.",vi:"Tạo từ <code>CHANGELOG.md</code> lúc deploy, nên danh sách này luôn khớp với repository. Nội dung changelog viết bằng tiếng Anh."},
+relLink:{en:"Full changelog on GitHub →",vi:"Xem toàn bộ changelog trên GitHub →"},
+finalH:{en:"Run your next project with a process.",vi:"Chạy dự án tiếp theo với một quy trình rõ ràng."},
+finalP:{en:"Free and open source under MIT. Works on new and existing repositories.",vi:"Miễn phí, mã nguồn mở theo giấy phép MIT. Dùng được cho repository mới lẫn đang có."},
+foot:{en:"DarkForge by Tuan Luu · MIT. Inspired by superpowers (Jesse Vincent) and grill-me (Matt Pocock).",vi:"DarkForge của Tuan Luu · MIT. Lấy cảm hứng từ superpowers (Jesse Vincent) và grill-me (Matt Pocock)."},
+guide:{en:"User guide",vi:"Hướng dẫn"},mon:{en:"Monday",vi:"Thứ Hai"},tue:{en:"Tuesday",vi:"Thứ Ba"},
+pause:{en:"Pause",vi:"Tạm dừng"},play:{en:"Play",vi:"Chạy"},done:{en:"Done",vi:"Xong"}
+};
+
+/* ---------- data ---------- */
+const FACTS=[[{en:"v0.1.0",vi:"v0.1.0"},{en:"MIT licensed",vi:"Giấy phép MIT"}],[{en:"Zero npm dependencies",vi:"Không có npm dependency"},{en:"Node 18+, git; gh optional",vi:"Node 18+, git; gh tùy chọn"}],[{en:"Windows, macOS, Linux",vi:"Windows, macOS, Linux"},{en:"CI on all three",vi:"CI trên cả ba"}],[{en:"No telemetry",vi:"Không telemetry"},{en:"Network only through git and gh",vi:"Chỉ dùng mạng qua git và gh"}]];
+const RAIL=[{en:"Pick",vi:"Chọn task"},{en:"Start + route",vi:"Tạo branch + route"},{en:"Implement",vi:"Thực hiện"},{en:"Review",vi:"Review"},{en:"Fix round",vi:"Vòng sửa"},{en:"Memory bank",vi:"Memory bank"},{en:"Gate",vi:"Gate"},{en:"Merge",vi:"Merge"},{en:"Report",vi:"Báo cáo"}];
+const LOG=[
+ [0,"c","> /darkforge:next-task"],
+ [0,"d","  read memory-bank/activeContext.md, progress.md"],
+ [0,"","  next: 014 add-export-csv  (risk: medium)"],
+ [1,"","  df task start 014 add-export-csv"],
+ [1,"","  route: darkforge:builder (sonnet) -> darkforge:reviewer (opus)"],
+ [2,"o","  ● builder implementing docs/tasks/014-add-export-csv.md"],
+ [2,"d","    report: tests first, 3 files changed, gate passed"],
+ [3,"o","  ● reviewer checking branch against package + constraints"],
+ [3,"r","    CHANGES REQUIRED  blocking  src/export.ts:41 header row missing for empty set"],
+ [4,"o","  fix round 1 -> same builder, defect line only"],
+ [4,"g","    reviewer re-check: APPROVED"],
+ [5,"","  update progress.md, activeContext.md; commit memory-bank/"],
+ [5,"g","  df memory lint      memory: ok"],
+ [6,"g","  df gate             ALL CHECKS PASSED"],
+ [7,"","  df task merge 014   push, PR, wait for checks, merge"],
+ [8,"","  014 done · builder/sonnet, reviewer/opus · 1 fix round"],
+ [8,"","  tokens  implement 61.2k  review 38.9k  fix 14.1k  orch 9.4k"],
+ [8,"c","  next: 015 settings-page"]
+];
+const BAD=[{en:"Re-reads the whole spec at every start",vi:"Đọc lại toàn bộ spec mỗi lần bắt đầu"},{en:"Task boundaries decided on the fly",vi:"Ranh giới task quyết định tùy hứng"},{en:"Strongest model used out of habit",vi:"Dùng model mạnh nhất theo thói quen"},{en:"The same agent writes and approves its own code",vi:"Cùng một agent vừa viết vừa duyệt code của mình"},{en:"Checks pass on some commit, not the one that merges",vi:"Check pass trên commit nào đó, không phải commit được merge"},{en:"Decisions live in a chat that gets compacted",vi:"Quyết định nằm trong chat rồi bị nén mất"},{en:"No idea where the tokens went",vi:"Không biết token đã đi đâu"}];
+const GOOD=[{en:"Starts from two short memory-bank files",vi:"Bắt đầu từ hai file memory bank ngắn"},{en:"Work arrives as a task package in <code>docs/tasks/</code>",vi:"Công việc đến dưới dạng task package trong <code>docs/tasks/</code>"},{en:"Model picked from <code>routing</code> by risk, always explicit",vi:"Model chọn từ <code>routing</code> theo rủi ro, luôn ghi rõ"},{en:"A different agent reviews against the package",vi:"Một agent khác review so với package"},{en:"Gate must pass on the exact commit that merges",vi:"Gate phải pass trên đúng commit được merge"},{en:"Decisions and open questions kept in <code>memory-bank/</code>",vi:"Quyết định và câu hỏi mở lưu trong <code>memory-bank/</code>"},{en:"Ledger shows tokens per task, per model, orchestrator vs subagents",vi:"Ledger hiển thị token theo task, theo model, orchestrator và subagent"}];
+const PROJ=[
+ ["init",{en:"Initialize",vi:"Khởi tạo"},{en:"One-question-at-a-time interview. Writes config, memory bank, constraints and a CLAUDE.md block. Never overwrites existing files.",vi:"Phỏng vấn từng câu một. Ghi config, memory bank, constraints và một khối CLAUDE.md. Không ghi đè file đã có."}],
+ ["plan-phase",{en:"Plan a phase",vi:"Lập kế hoạch phase"},{en:"Phase plan with risk and models per task, stress-tested, then one task package per task.",vi:"Phase plan có rủi ro và model cho từng task, được stress-test, rồi viết một task package cho mỗi task."}],
+ ["next-task",{en:"Run tasks",vi:"Chạy task"},{en:"One task end to end per run. Repeat until the phase's tasks are merged.",vi:"Mỗi lần chạy hoàn tất một task. Lặp lại đến khi mọi task của phase được merge."}],
+ ["phase-review",{en:"Review the phase",vi:"Review phase"},{en:"Cross-task review by an independent agent, gate, exit checklist with evidence.",vi:"Review xuyên suốt các task bởi agent độc lập, chạy gate, checklist kết thúc có bằng chứng."}],
+ ["plan-phase",{en:"Next phase",vi:"Phase tiếp theo"},{en:"The memory bank carries decisions and the backlog into the next plan.",vi:"Memory bank mang quyết định và backlog sang kế hoạch tiếp theo."}]
+];
+const STEPS=[
+ [{en:"Pick",vi:"Chọn task"},{en:"Read only activeContext.md and progress.md; take the task under ## Next.",vi:"Chỉ đọc activeContext.md và progress.md; lấy task dưới ## Next."},{en:"memory bank",vi:"memory bank"},{en:"task id, package header",vi:"mã task, header của package"},{en:"Stops and asks you if a ## Waiting on owner question blocks it.",vi:"Dừng lại và hỏi bạn nếu một câu hỏi trong ## Waiting on owner chặn nó."}],
+ [{en:"Start + route",vi:"Tạo branch + route"},{en:"Create task/NNN-slug from the base branch, then pick implementer and reviewer from routing.",vi:"Tạo task/NNN-slug từ base branch, rồi chọn implementer và reviewer theo routing."},{en:"package header, config",vi:"header package, config"},{en:"branch, agents + models",vi:"branch, agent + model"},"df task start NNN <slug>"],
+ [{en:"Implement",vi:"Thực hiện"},{en:"The implementer builds the package test-first on the branch. The orchestrator never writes task code.",vi:"Implementer làm package theo hướng test trước trên branch. Orchestrator không bao giờ tự viết code task."},"docs/tasks/NNN-*.md",{en:"commits, report",vi:"commit, báo cáo"},"df ledger phase implement"],
+ [{en:"Review",vi:"Review"},{en:"A different, read-only agent reviews the branch against the package and constraints.",vi:"Một agent khác, chỉ đọc, review branch so với package và constraints."},{en:"diff, package, constraints",vi:"diff, package, constraints"},"APPROVED / CHANGES REQUIRED","df ledger phase review"],
+ [{en:"Fix rounds",vi:"Vòng sửa"},{en:"Blocking defects go back to the same implementer as file:line lines; the reviewer re-checks only those.",vi:"Lỗi chặn được gửi lại đúng implementer dưới dạng dòng file:line; reviewer chỉ kiểm tra lại các lỗi đó."},{en:"defect lines only",vi:"chỉ các dòng lỗi"},{en:"new commits, re-check",vi:"commit mới, kiểm tra lại"},{en:"Raise one tier after 2 rounds, ask the owner after 3.",vi:"Nâng một bậc model sau 2 vòng, hỏi owner sau 3 vòng."},1],
+ [{en:"Memory bank",vi:"Memory bank"},{en:"Update progress, active context, decisions and backlog; commit memory-bank/ only.",vi:"Cập nhật progress, active context, decisions và backlog; chỉ commit memory-bank/."},{en:"reports, ledger",vi:"báo cáo, ledger"},{en:"committed memory bank",vi:"memory bank đã commit"},"df memory lint  ->  memory: ok"],
+ [{en:"Gate",vi:"Gate"},{en:"Run your gate on the new HEAD. Failing lines go back to the implementer as a fix round.",vi:"Chạy gate trên HEAD mới. Dòng lỗi được gửi lại implementer như một vòng sửa."},{en:"gate command",vi:"lệnh gate"},"ALL CHECKS PASSED","df gate",1],
+ [{en:"Merge",vi:"Merge"},{en:"Push, open the PR, wait for required checks and merge; or merge locally.",vi:"Push, mở PR, chờ các check bắt buộc rồi merge; hoặc merge local."},{en:"fresh gate on this commit",vi:"gate mới trên chính commit này"},{en:"merged base branch",vi:"base branch đã merge"},"df task merge NNN --title \"...\""],
+ [{en:"Report",vi:"Báo cáo"},{en:"At most six lines in your language: result, models, fix rounds, token row, next task.",vi:"Tối đa sáu dòng bằng ngôn ngữ của bạn: kết quả, model, số vòng sửa, dòng token, task kế tiếp."},"df ledger report",{en:"owner summary",vi:"tóm tắt cho owner"},"df ledger report"]
+];
+const ROUTE={low:[{en:"Low · docs change",vi:"Thấp · sửa tài liệu"},{en:"Rewrite the README install section",vi:"Viết lại phần cài đặt trong README"},"builder / sonnet","reviewer / sonnet"],
+ medium:[{en:"Medium · feature",vi:"Trung bình · tính năng"},{en:"Add CSV export to the reports page",vi:"Thêm xuất CSV cho trang báo cáo"},"builder / sonnet","reviewer / opus"],
+ high:[{en:"High · storage or auth",vi:"Cao · lưu trữ hoặc xác thực"},{en:"Encrypt the local data store (listed in riskAreas)",vi:"Mã hóa kho dữ liệu local (nằm trong riskAreas)"},"specialist / opus","security-reviewer / opus"]};
+const LEDGER=[["implement",61200],["review",38900],["fix",14100],["orchestrator",9400]];
+const WHY=[
+ [{en:"small task packages",vi:"task package nhỏ"},{en:"Less to read, less to drift",vi:"Đọc ít hơn, ít trôi hơn"},{en:"An implementer is told to build one file in docs/tasks/, not the whole spec. The package lists files, interfaces, tests and what is out of scope.",vi:"Implementer chỉ được giao làm một file trong docs/tasks/, không phải cả spec. Package liệt kê file, interface, test và những gì nằm ngoài phạm vi."}],
+ [{en:"routing + model guard",vi:"routing + model guard"},{en:"The right model, every time",vi:"Đúng model, mọi lúc"},{en:"Cheap work goes to cheaper models and risky work to stronger ones, by rule rather than habit. The hook blocks banned or missing models.",vi:"Việc đơn giản dùng model rẻ hơn, việc rủi ro dùng model mạnh hơn, theo quy tắc chứ không theo thói quen. Hook chặn model bị cấm hoặc thiếu model."}],
+ [{en:"independent review",vi:"review độc lập"},{en:"A second pair of eyes",vi:"Thêm một đôi mắt"},{en:"The agent that wrote the code never approves it. The reviewer cannot edit, so it can only report defects.",vi:"Agent viết code không bao giờ tự duyệt. Reviewer không thể sửa, nên chỉ có thể báo lỗi."}],
+ [{en:"exact-commit gate",vi:"gate đúng commit"},{en:"What merges is what passed",vi:"Thứ được merge chính là thứ đã pass"},{en:"The gate result is tied to a commit. Any change after the gate, even to the memory bank, means running it again.",vi:"Kết quả gate gắn với một commit. Bất kỳ thay đổi nào sau gate, kể cả memory bank, đều phải chạy lại gate."}],
+ [{en:"memory bank",vi:"memory bank"},{en:"Sessions start cheap",vi:"Phiên mới bắt đầu nhẹ"},{en:"State is kept short and current, and checked by a lint, so a new session reads two files instead of a long history.",vi:"Trạng thái được giữ ngắn, luôn cập nhật và được lint kiểm tra, nên phiên mới chỉ đọc hai file thay vì cả lịch sử dài."}],
+ [{en:"token ledger",vi:"token ledger"},{en:"You can see the cost",vi:"Bạn thấy được chi phí"},{en:"Per-task and per-model totals show which work was expensive, so routing can be tuned with evidence.",vi:"Tổng theo task và theo model cho thấy việc nào tốn kém, để điều chỉnh routing dựa trên dữ liệu."}]
+];
+const S1=["> /darkforge:next-task","  014 add-export-csv: implement ✓","  review running…"];
+const CMDS=[
+ ["/plugin marketplace add tuanluu-agilityio/darkforge",{en:"Add the marketplace",vi:"Thêm marketplace"}],
+ ["/plugin install darkforge@darkforge",{en:"Install; restart Claude Code if asked",vi:"Cài đặt; khởi động lại Claude Code nếu được yêu cầu"}],
+ ["/darkforge:init",{en:"Interview, then config, memory bank, constraints",vi:"Phỏng vấn, rồi tạo config, memory bank, constraints"}],
+ ["/darkforge:plan-phase",{en:"Phase plan and task packages",vi:"Phase plan và task package"}],
+ ["/darkforge:next-task",{en:"Run one task end to end; repeat",vi:"Chạy trọn một task; lặp lại"}],
+ ["/darkforge:phase-review",{en:"Close the phase",vi:"Đóng phase"}],
+ ["/darkforge:status",{en:"Read-only: progress, open questions, ledger",vi:"Chỉ đọc: tiến độ, câu hỏi mở, ledger"}]
+];
+const REQ=[{en:"<b>Claude Code 2.1.330+</b> (tested), with plugin support and the <code>Agent</code> tool",vi:"<b>Claude Code 2.1.330+</b> (đã kiểm thử), có hỗ trợ plugin và tool <code>Agent</code>"},{en:"<b>Node.js 18+</b> on PATH. No <code>npm install</code> needed.",vi:"<b>Node.js 18+</b> trong PATH. Không cần <code>npm install</code>."},{en:"<b>git</b>; <b>gh</b> for the pull-request flow",vi:"<b>git</b>; <b>gh</b> cho quy trình pull request"},{en:"<b>Windows, macOS or Linux</b>",vi:"<b>Windows, macOS hoặc Linux</b>"},{en:"<b>Superpowers</b> optional",vi:"<b>Superpowers</b> không bắt buộc"}];
+const ORIG=[
+ [{en:"Branch, PR and merge commands typed by the session each time",vi:"Phiên tự gõ lệnh branch, PR, merge mỗi lần"},{en:"<code>task start</code> / <code>task merge</code> with precondition checks",vi:"<code>task start</code> / <code>task merge</code> có kiểm tra điều kiện trước"}],
+ [{en:"\"Never use model X\" as a rule in CLAUDE.md",vi:"\"Không bao giờ dùng model X\" là quy tắc trong CLAUDE.md"},{en:"<code>models.banned</code> enforced by the model-guard hook",vi:"<code>models.banned</code> được hook model-guard thực thi"}],
+ [{en:"Model chosen per task from memory of the rules",vi:"Chọn model cho từng task dựa vào trí nhớ về quy tắc"},{en:"<code>routing</code> per risk level, explicit model on every call",vi:"<code>routing</code> theo mức rủi ro, mọi lệnh gọi đều ghi rõ model"}],
+ [{en:"Token counts copied into progress.md by hand",vi:"Chép tay số token vào progress.md"},{en:"Ledger hooks and <code>ledger report</code>",vi:"Hook ledger và <code>ledger report</code>"}],
+ [{en:"Memory-bank drift found late",vi:"Memory bank lệch, phát hiện muộn"},{en:"<code>memory lint</code>, checked by <code>task merge</code>",vi:"<code>memory lint</code>, được <code>task merge</code> kiểm tra"}],
+ [{en:"Gate output read in full every time",vi:"Đọc toàn bộ output của gate mỗi lần"},{en:"Quiet gate: failing lines or the marker only",vi:"Gate gọn: chỉ dòng lỗi hoặc dòng báo thành công"}],
+ [{en:"Project-specific agents",vi:"Agent riêng cho dự án"},{en:"Generic agents that read your config and constraints",vi:"Agent dùng chung, đọc config và constraints của bạn"}]
+];
+const FAQ=[
+ [{en:"Does it replace Claude Code?",vi:"Nó có thay thế Claude Code không?"},{en:"No. DarkForge is a plugin that runs inside Claude Code: skills the main session follows, six agents, three hooks and a small Node CLI.",vi:"Không. DarkForge là plugin chạy bên trong Claude Code: các skill mà phiên chính làm theo, sáu agent, ba hook và một Node CLI nhỏ."}],
+ [{en:"Is it free and open source?",vi:"Có miễn phí và mã nguồn mở không?"},{en:"Yes, MIT licensed. It has no npm dependencies.",vi:"Có, theo giấy phép MIT. Không có npm dependency nào."}],
+ [{en:"Does it require Superpowers?",vi:"Có bắt buộc cài Superpowers không?"},{en:"No. It works standalone. If superpowers is installed and <code>superpowers</code> is <code>\"auto\"</code>, plan-phase can use a superpowers plan as input and implementers use its TDD skill.",vi:"Không. Nó chạy độc lập. Nếu đã cài superpowers và <code>superpowers</code> là <code>\"auto\"</code>, plan-phase có thể dùng plan của superpowers làm đầu vào, và implementer dùng skill TDD của nó."}],
+ [{en:"Can I use it on an existing project?",vi:"Dùng cho dự án đang có được không?"},{en:"Yes. <code>/darkforge:init</code> works on new or existing repositories and never overwrites existing files. Re-running it changes only the config and its marked CLAUDE.md block.",vi:"Được. <code>/darkforge:init</code> chạy trên repository mới hoặc đang có, và không ghi đè file đã có. Chạy lại chỉ thay đổi config và khối đánh dấu trong CLAUDE.md."}],
+ [{en:"Can I choose the models?",vi:"Tôi có tự chọn model được không?"},{en:"Yes. <code>routing</code>, <code>models.tiers</code>, <code>models.banned</code>, <code>models.floors</code> and the escalation thresholds are all in <code>.darkforge/config.json</code>.",vi:"Được. <code>routing</code>, <code>models.tiers</code>, <code>models.banned</code>, <code>models.floors</code> và ngưỡng nâng model đều nằm trong <code>.darkforge/config.json</code>."}],
+ [{en:"Does it work without GitHub CLI?",vi:"Không có GitHub CLI thì có dùng được không?"},{en:"Yes. Set <code>git.prFlow</code> to <code>false</code> or <code>git.remote</code> to <code>null</code> and tasks merge locally.",vi:"Được. Đặt <code>git.prFlow</code> là <code>false</code> hoặc <code>git.remote</code> là <code>null</code>, task sẽ được merge local."}],
+ [{en:"What happens when the gate fails?",vi:"Gate thất bại thì sao?"},{en:"The failing lines go back to the implementer as a fix round. <code>task merge</code> also refuses a stale gate, so nothing merges unless the gate passed on that exact commit.",vi:"Các dòng lỗi được gửi lại implementer như một vòng sửa. <code>task merge</code> cũng từ chối gate cũ, nên không gì được merge nếu gate chưa pass trên đúng commit đó."}],
+ [{en:"Can it resume after I restart Claude Code?",vi:"Khởi động lại Claude Code thì có tiếp tục được không?"},{en:"Yes. The session brief names the current task, and next-task continues on its branch from the first step not yet done.",vi:"Được. Bản tóm tắt đầu phiên nêu task hiện tại, và next-task tiếp tục trên branch đó từ bước đầu tiên chưa làm."}],
+ [{en:"Does it collect telemetry?",vi:"Nó có thu thập telemetry không?"},{en:"No. The plugin uses the network only through <code>git</code> and <code>gh</code>. The ledger file is local and git-ignored. Claude Code, GitHub and your CI have their own policies.",vi:"Không. Plugin chỉ dùng mạng qua <code>git</code> và <code>gh</code>. File ledger nằm ở local và bị git-ignore. Claude Code, GitHub và CI của bạn có chính sách riêng của chúng."}],
+ [{en:"Is the token report an exact bill?",vi:"Báo cáo token có phải hóa đơn chính xác không?"},{en:"No. It is best effort, read from transcripts by hooks. It may miss the last turn of a session, and totals include cheaper cache reads.",vi:"Không. Đây là số liệu ước tính tốt nhất, do hook đọc từ transcript. Nó có thể bỏ sót lượt cuối của phiên, và tổng có gồm cache read vốn rẻ hơn."}]
+];
+const LIM=[{en:"An Agent call without <code>model</code> to a non-DarkForge agent inherits the session model, which the hook cannot see.",vi:"Lệnh gọi Agent không có <code>model</code> tới agent không thuộc DarkForge sẽ kế thừa model của phiên, và hook không nhìn thấy được."},{en:"Hooks need a Claude Code version that names the subagent tool <code>Agent</code>.",vi:"Hook cần phiên bản Claude Code gọi tool subagent là <code>Agent</code>."},{en:"The token ledger is best effort; built-in web-fetch subagent tokens are not recorded.",vi:"Token ledger chỉ ở mức ước tính; token của subagent web-fetch tích hợp sẵn không được ghi."},{en:"The full end-to-end run in a live session is a manual checklist; CI covers scripts and hooks.",vi:"Lần chạy end-to-end đầy đủ trong phiên thật là checklist thủ công; CI chỉ kiểm tra script và hook."}];
+/* releases: parsed from CHANGELOG.md, which the Pages workflow copies next to this page */
+let REL=[],relState="loading";
+const GROUP_VI={"Added":"Bổ sung","Changed":"Thay đổi","Fixed":"Sửa lỗi","Removed":"Loại bỏ","Deprecated":"Ngừng hỗ trợ","Security":"Bảo mật","Known issues":"Vấn đề đã biết"};
+const REPO="https://github.com/tuanluu-agilityio/darkforge/blob/main/";
+function inline(s){
+  return esc(s).replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(_,t,u)=>`<a href="${/^https?:/.test(u)?u:REPO+u.replace(/^\.?\//,"")}">${t}</a>`);
+}
+function parseChangelog(md){
+  const out=[];let rel=null,grp=null,m;
+  for(const line of md.split(/\r?\n/)){
+    if((m=line.match(/^##\s+\[?([^\]\s]+)\]?(?:\s*-\s*(\S+))?/))){rel={v:m[1],date:m[2]||"",groups:[]};out.push(rel);grp=null;}
+    else if(rel&&(m=line.match(/^###\s+(.+)/))){grp=[m[1].trim(),[]];rel.groups.push(grp);}
+    else if(grp&&(m=line.match(/^\s*[-*]\s+(.+)/))){grp[1].push(inline(m[1]));}
+    else if(grp&&grp[1].length&&/^\s{2,}\S/.test(line)){grp[1][grp[1].length-1]+=" "+inline(line.trim());}
+  }
+  return out.filter(r=>r.groups.length);
+}
+async function loadReleases(){
+  for(const u of ["CHANGELOG.md","../CHANGELOG.md"]){
+    try{const r=await fetch(u,{cache:"no-cache"});if(!r.ok)continue;const p=parseChangelog(await r.text());if(p.length){REL=p;relI=0;relState="ok";renderRel();return;}}catch{}
+  }
+  relState="error";renderRel();
+}
+
+/* ---------- render ---------- */
+let route="medium",stepI=0,relI=0;
+function render(){
+  document.documentElement.lang=lang;
+  document.querySelectorAll("[data-t]").forEach(el=>{const v=T[el.dataset.t];if(v)el.innerHTML=v[lang];});
+  document.querySelectorAll("[data-lang]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.lang===lang));
+  $("#facts").innerHTML=FACTS.map(([a,b])=>`<div><b>${L(a)}</b><span>${L(b)}</span></div>`).join("");
+  $("#bad").innerHTML=BAD.map(x=>`<li>${L(x)}</li>`).join("");
+  $("#good").innerHTML=GOOD.map(x=>`<li>${L(x)}</li>`).join("");
+  $("#proj").innerHTML=PROJ.map(([c,n,p],i)=>`<div class="ph${i===2?" hot":""}"><span class="n">${i===4?"↺":i+1}</span><b>${L(n)}</b><code>/darkforge:${c}</code><p>${L(p)}</p></div>`).join("");
+  $("#seg").innerHTML=Object.keys(ROUTE).map(k=>`<button data-r="${k}" aria-pressed="${k===route}">${L(ROUTE[k][0])}</button>`).join("");
+  const r=ROUTE[route];
+  $("#route").innerHTML=`<div class="ex"><span>${lang==="vi"?"Ví dụ":"Example"}</span><b>${L(r[1])}</b></div><div><span>Implementer</span><b>${r[2]}</b></div><div><span>Reviewer</span><b>${r[3]}</b></div><div><span>${lang==="vi"?"Khi sửa lỗi":"Fix rounds"}</span><b>${lang==="vi"?"+1 bậc sau 2 · hỏi sau 3":"+1 tier after 2 · ask after 3"}</b></div>`;
+  const mx=Math.max(...LEDGER.map(x=>x[1])),tot=LEDGER.reduce((s,x)=>s+x[1],0);
+  $("#ledger").innerHTML=LEDGER.map(([k,v],i)=>`<div class="lrow${i?"":" top"}"><span>${k}</span><i style="width:${(v/mx*100).toFixed(1)}%"></i><em>${(v/1000).toFixed(1)}k</em></div>`).join("")+`<div class="lrow"><span style="color:var(--ink)">total</span><span></span><em style="color:var(--ink)">${(tot/1000).toFixed(1)}k</em></div>`;
+  $("#whyList").innerHTML=WHY.map(([m,h,p])=>`<div class="card"><span class="m">${L(m)}</span><h3>${L(h)}</h3><p>${L(p)}</p></div>`).join("");
+  $("#s1log").innerHTML=S1.map(esc).join("<br>");
+  $("#cmds").innerHTML=CMDS.map(([c,p],i)=>`<div class="cmd"><code id="c${i}">${esc(c)}</code><button class="copy" data-copy="c${i}">Copy</button><p>${L(p)}</p></div>`).join("");
+  $("#req").innerHTML=REQ.map(x=>`<li>${L(x)}</li>`).join("");
+  $("#origT").innerHTML=ORIG.map(([a,b])=>`<tr><td data-l="${T.byHand[lang]}">${L(a)}</td><td data-l="DarkForge">${L(b)}</td></tr>`).join("");
+  $("#faqList").innerHTML=FAQ.map(([q,a])=>`<details><summary>${L(q)}</summary><p>${L(a)}</p></details>`).join("");
+  $("#lim").innerHTML=LIM.map(x=>`<li>${L(x)}</li>`).join("");
+  renderRel();
+  $("#steps").innerHTML=STEPS.map((s,i)=>`<button role="tab" id="t${i}" aria-controls="detail" class="${s[5]?"loop":""}" aria-selected="${i===stepI}" tabindex="${i===stepI?0:-1}">${L(s[0])}<small>${i+1}${s[5]?(lang==="vi"?" · có thể lặp":" · can loop"):""}</small></button>`).join("");
+  showStep(stepI);
+  rail.innerHTML=RAIL.map((n,i)=>`<div class="st"><span class="dot"></span><span>${L(n)}</span><small>${i===4?"loop":""}</small></div>`).join("");
+  paint();
+}
+function showStep(i){
+  stepI=i;const s=STEPS[i],vi=lang==="vi";
+  $("#steps").querySelectorAll("button").forEach((b,j)=>{b.setAttribute("aria-selected",i===j);b.tabIndex=i===j?0:-1;});
+  $("#detail").setAttribute("aria-labelledby","t"+i);
+  $("#detail").innerHTML=`<h3>${i+1}. ${L(s[0])}</h3><p style="color:var(--mut)">${esc(L(s[1]))}</p><dl><dt>${vi?"Đầu vào":"Inputs"}</dt><dd>${esc(L(s[2]))}</dd><dt>${vi?"Đầu ra":"Outputs"}</dt><dd>${esc(L(s[3]))}</dd><dt>${vi?"Chi tiết":"Detail"}</dt><dd><code>${esc(L(s[4]))}</code></dd></dl>`;
+}
+const ver=v=>/^\d/.test(v)?"v"+v:v;
+function renderRel(){
+  const vi=lang==="vi";
+  if(!REL.length){
+    $("#relList").innerHTML="";
+    $("#relBody").innerHTML=`<p style="color:var(--mut)">${relState==="loading"?(vi?"Đang tải changelog…":"Loading the changelog…"):(vi?"Không tải được changelog. Xem bản đầy đủ trên GitHub.":"The changelog could not be loaded. See the full changelog on GitHub.")}</p>`;
+    return;
+  }
+  $("#relList").innerHTML=REL.map((r,i)=>`<button role="tab" id="r${i}" aria-selected="${i===relI}" tabindex="${i===relI?0:-1}"><span>${esc(ver(r.v))}${i===0?`<span class="latest">${vi?"mới nhất":"latest"}</span>`:""}</span><small>${esc(r.date)}</small></button>`).join("");
+  showRel(relI);
+}
+function showRel(i){
+  relI=i;const r=REL[i];if(!r)return;
+  $("#relList").querySelectorAll("button").forEach((b,j)=>{b.setAttribute("aria-selected",i===j);b.tabIndex=i===j?0:-1;});
+  $("#relBody").setAttribute("aria-labelledby","r"+i);
+  $("#relBody").innerHTML=`<h3>${esc(ver(r.v))} <small>${esc(r.date)}</small></h3>`+r.groups.map(([g,items])=>`<h4 class="${/known|security|deprecat/i.test(g)?"k":""}"><i></i>${esc(lang==="vi"&&GROUP_VI[g]||g)}</h4><ul>${items.map(x=>`<li>${x}</li>`).join("")}</ul>`).join("");
+}
+function tabKeys(box,count,cur,show){
+  box.addEventListener("keydown",e=>{const d={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1}[e.key];const c=count();if(!d||!c)return;e.preventDefault();const n=(cur()+d+c)%c;show(n);box.children[n].focus();});
+}
+
+/* ---------- hero replay ---------- */
+const log=$("#log"),rail=$("#rail");
+let pos=0,timer=null,playing=false;
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+function paint(){
+  log.innerHTML=LOG.slice(0,pos).map(([,c,t])=>`<span class="${c}">${esc(t)}</span>`).join("\n")+(pos<LOG.length?'\n<span class="o">▍</span>':"");
+  const cur=pos?LOG[pos-1][0]:-1,done=pos>=LOG.length;
+  rail.querySelectorAll(".st").forEach((el,i)=>{el.className="st"+(done||i<cur?" ok":i===cur?" on":"");if(i===3&&cur===4)el.classList.add("bad");});
+  log.scrollTop=log.scrollHeight;
+  $("#play").textContent=T[done?"done":playing?"pause":"play"][lang];
+}
+function tick(){if(pos<LOG.length)pos++;if(pos>=LOG.length)stop();else paint();}
+function start(){playing=true;clearInterval(timer);timer=setInterval(tick,900);paint();}
+function stop(){playing=false;clearInterval(timer);paint();}
+$("#play").onclick=()=>{if(pos>=LOG.length)return;playing?stop():start();};
+$("#step").onclick=()=>{stop();tick();};
+$("#reset").onclick=()=>{pos=0;start();};
+
+/* ---------- events ---------- */
+document.querySelectorAll("[data-lang]").forEach(b=>b.onclick=()=>{lang=b.dataset.lang;try{localStorage.setItem("df-lang",lang)}catch{}render();});
+$("#seg").addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(b){route=b.dataset.r;render();}});
+$("#steps").addEventListener("click",e=>{const b=e.target.closest("button");if(b)showStep(+b.id.slice(1));});
+$("#relList").addEventListener("click",e=>{const b=e.target.closest("button");if(b)showRel(+b.id.slice(1));});
+tabKeys($("#steps"),()=>STEPS.length,()=>stepI,showStep);
+tabKeys($("#relList"),()=>REL.length,()=>relI,showRel);
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("[data-copy]");if(!b)return;
+  const el=document.getElementById(b.dataset.copy);
+  try{await navigator.clipboard.writeText(el.textContent);b.textContent="Copied";b.classList.add("done");}
+  catch{const r=document.createRange();r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent="Selected";}
+  setTimeout(()=>{b.textContent="Copy";b.classList.remove("done");},1600);
+});
+
+/* ---------- boot ---------- */
+try{lang=localStorage.getItem("df-lang")||""}catch{lang=""}
+if(lang!=="en"&&lang!=="vi")lang=(navigator.language||"").toLowerCase().startsWith("vi")?"vi":"en";
+render();
+if(reduce){pos=LOG.length;stop();}else start();
+loadReleases();
+}
+</script>
+</body>
+</html>

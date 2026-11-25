@@ -122,6 +122,7 @@ test("e2e (local merge): init, brief, start, guard, ledger, lint, gate, merge, r
   r = df(root, "task", "merge", "001", "--title", "Demo");
   assert.equal(r.code, 0, r.out + r.err);
   assert.equal(git(root, "branch", "--show-current"), "main");
+  assert.equal(git(root, "branch", "--list", "task/001-demo"), "", "merged task branch deleted");
   assert.ok(fs.existsSync(path.join(root, "feature.txt")));
   assert.equal(git(root, "status", "--porcelain"), "", "tree clean after merge");
 

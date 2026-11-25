@@ -174,6 +174,12 @@ function waitForChecks(root, git, n) {
   }
 }
 
+/** Delete a branch merged locally with -d (git still refuses unmerged work). Returns a note for a failure. */
+function deleteMerged(root, branch) {
+  const del = run("git", ["branch", "-d", branch], { cwd: root });
+  return del.code === 0 ? "" : `; could not delete branch ${branch}: ${output(del) || `exit ${del.code}`}`;
+}
+
 /** After the PR merged: clear the task, switch to the updated base and drop the local task branch. */
 function cleanupAfterMerge(root, git, id, branch, n) {
   const base = git.baseBranch;
@@ -212,13 +218,14 @@ export function mergeTask(root, id, { title } = {}) {
         throw new Stop(`${e.message}\nrun "git merge --abort" to undo the partial merge`);
       }
       writeState(root, { task: null, phase: null, lastTask: id });
-      if (!git.remote) return { ok: true, message: `merged ${branch} into ${base} (local, no remote)` };
+      if (!git.remote) return { ok: true, message: `merged ${branch} into ${base} (local, no remote)${deleteMerged(root, branch)}` };
       try {
         step(root, "git", ["push", git.remote, base]);
       } catch (e) {
         throw new Stop(`merged ${branch} into ${base} locally, but the push failed; run "git push ${git.remote} ${base}":\n${e.message}`);
       }
-      return { ok: true, message: `merged ${branch} into ${base} (local) and pushed to ${git.remote}` };
+      // After the push: a branch started from <remote>/<base> tracks it, and -d checks against that upstream.
+      return { ok: true, message: `merged ${branch} into ${base} (local) and pushed to ${git.remote}${deleteMerged(root, branch)}` };
     }
 
     const shortSha = head.slice(0, 7);

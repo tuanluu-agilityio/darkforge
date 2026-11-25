@@ -376,6 +376,7 @@ test("merge local (prFlow false, remote set): switch base, pull --ff-only, merge
     "git pull --ff-only origin main",
     "git merge --no-ff task/7-add-thing -m Merge task/7-add-thing",
     "git push origin main",
+    "git branch -d task/7-add-thing",
   ]);
   assert.match(r.message, /pushed to origin/);
   assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "7" });
@@ -410,7 +411,18 @@ test("merge local (remote null): diff against local base", () => {
     "git diff --name-only dev...HEAD",
     "git switch dev",
     "git merge --no-ff task/7-add-thing -m Merge task/7-add-thing",
+    "git branch -d task/7-add-thing",
   ]);
+});
+
+test("merge local: a failing branch delete after the merge is reported but the merge stands", () => {
+  const root = project({ remote: null, baseBranch: "dev" });
+  fake({ "git diff --name-only dev...HEAD": { stdout: MB_DIFF }, "git branch -d task/7-add-thing": { code: 1, stderr: "error: cannot delete" } });
+  const r = mergeTask(root, "7", { title: "T" });
+  assert.equal(r.ok, true, r.message);
+  assert.match(r.message, /merged task\/7-add-thing into dev/);
+  assert.match(r.message, /could not delete branch task\/7-add-thing/);
+  assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "7" });
 });
 
 // ---------- merge: refusals (no push / gh / merge issued) ----------
@@ -544,6 +556,7 @@ test("real git: start and local merge in a temp repo with a space in its path", 
   const m = mergeTask(root, "3", { title: "Demo" });
   assert.equal(m.ok, true, m.message);
   assert.equal(git(root, "branch", "--show-current"), "main");
+  assert.equal(git(root, "branch", "--list", "task/3-demo-task"), "", "merged task branch deleted");
   assert.equal(git(root, "log", "-1", "--format=%s"), "Merge task/3-demo-task");
   assert.equal(git(root, "rev-parse", "HEAD^2"), head);
   assert.ok(fs.existsSync(path.join(root, "feature.txt")));
@@ -628,4 +641,38 @@ test("merge re-run while the PR still waits in a merge queue: clear message, tas
   assert.equal(r.ok, false);
   assert.match(r.message, /PR #42 is still waiting in a merge queue/);
   assert.equal(readState(root).task, "7");
+});
+
+test("real git: local merge with a remote pushes, then deletes the task branch that tracked the remote base", () => {
+  resetRunner();
+  const remote = fs.mkdtempSync(path.join(os.tmpdir(), "df remote "));
+  git(remote, "init", "-q", "--bare");
+  git(remote, "symbolic-ref", "HEAD", "refs/heads/main");
+  const root = project({ prFlow: false }, { gate: false, task: null });
+  fs.writeFileSync(path.join(root, ".gitignore"), ".darkforge/\n");
+  git(root, "init", "-q");
+  git(root, "symbolic-ref", "HEAD", "refs/heads/main");
+  git(root, "config", "user.name", "t");
+  git(root, "config", "user.email", "t@example.com");
+  git(root, "config", "commit.gpgsign", "false");
+  git(root, "add", "-A");
+  git(root, "commit", "-q", "-m", "init");
+  git(root, "remote", "add", "origin", remote);
+  git(root, "push", "-q", "-u", "origin", "main");
+
+  assert.equal(startTask(root, "4", "remote-demo").ok, true);
+  fs.writeFileSync(path.join(root, "feature.txt"), "x\n");
+  fs.appendFileSync(path.join(root, "memory-bank", "progress.md"), "| 4 | done |\n");
+  fs.appendFileSync(path.join(root, "memory-bank", "activeContext.md"), "more\n");
+  git(root, "add", "-A");
+  git(root, "commit", "-q", "-m", "work");
+  const head = git(root, "rev-parse", "HEAD");
+  fs.writeFileSync(path.join(root, ".darkforge", "gate.json"), JSON.stringify({ head, ok: true, dirty: false }));
+
+  const m = mergeTask(root, "4", { title: "Remote demo" });
+  assert.equal(m.ok, true, m.message);
+  assert.doesNotMatch(m.message, /could not delete/);
+  assert.equal(git(root, "branch", "--list", "task/4-remote-demo"), "");
+  assert.equal(git(remote, "log", "-1", "--format=%s", "main"), "Merge task/4-remote-demo");
+  fs.rmSync(remote, { recursive: true, force: true });
 });

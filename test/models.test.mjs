@@ -40,3 +40,10 @@ test("raiseTier", () => {
   assert.equal(raiseTier("opus", c), "opus");
   assert.equal(raiseTier("fable", cfg()), "fable");
 });
+
+test("floors and routing ignore inherited properties", () => {
+  assert.equal(isBelowFloor("constructor", "haiku", cfg()), false);
+  assert.equal(isBelowFloor("toString", "haiku", cfg()), false);
+  assert.throws(() => route("constructor", cfg()), /unknown risk level/);
+  assert.throws(() => route("__proto__", cfg()), /unknown risk level/);
+});

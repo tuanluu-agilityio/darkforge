@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- `next-task` marked a task `auto-merge pending` whenever `git.autoMerge` was true, even with a local merge (`git.prFlow: false` or `git.remote: null`); the next task then stopped. Only the pull-request flow sets it now.
+- `task merge` reported a PR as merged as soon as `gh pr merge` succeeded; with a merge queue the PR was only queued. It now checks that the PR is `MERGED` and otherwise stops with the task still active. Re-running it after the merge only does the local cleanup, and only when a merged PR's head is the current commit and the tree is clean; an older merged PR for a reused branch name never skips the checks.
+- `task merge` deleted the local task branch with `git branch -d`, which fails after a squash or rebase merge; it uses `-D` once GitHub reports the PR merged.
+- The CLI ended with `process.exit()`, which can cut output written to a pipe; it sets the exit code instead.
+- Config: elements of `models.tiers`, `models.banned`, `riskAreas`, `git.requiredChecks` and values of `models.floors` must be strings; a `__proto__` key in the file is ignored instead of changing an object's prototype; routing and floors ignore inherited property names.
+
+### Added
+
+- `test/e2e-cli.test.mjs`: an end-to-end run of the CLI and hooks as real processes in a real git repository (init, session brief, task start, model guard, ledger, memory lint, gate, local merge, ledger report), run by CI on every platform.
+
 ## [0.1.0] - 2026-11-23
 
 ### Added

@@ -610,7 +610,8 @@ function parseChangelog(md){
     else if(grp&&(m=line.match(/^\s*[-*]\s+(.+)/))){grp[1].push(inline(m[1]));}
     else if(grp&&grp[1].length&&/^\s{2,}\S/.test(line)){grp[1][grp[1].length-1]+=" "+inline(line.trim());}
   }
-  return out.filter(r=>r.groups.length);
+  /* released versions only: "## [Unreleased]" stays off the site until it has a version and a date */
+  return out.filter(r=>r.groups.length&&/^\d/.test(r.v)&&/^\d{4}-\d{2}-\d{2}$/.test(r.date));
 }
 async function loadReleases(){
   for(const u of ["CHANGELOG.md","../CHANGELOG.md"]){

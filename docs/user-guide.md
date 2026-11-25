@@ -91,4 +91,5 @@ Token ledger (`hooks/ledger.mjs`, `darkforge ledger report`) is best effort:
 Process:
 
 - Memory lint rule 3 treats any mention of a `Q-NN` in `memory-bank/decisions.md` as its answer, so a question still listed under "## Waiting on owner" fails the lint: mention open questions in `decisions.md` only once answered.
-- The end-to-end run (init, plan-phase, next-task, phase-review in a live session) is manual; see [testing/e2e-checklist.md](testing/e2e-checklist.md). CI runs only the scripts and hooks.
+- With a merge queue, `task merge` stops while the PR waits in the queue and the task stays active; run it again once GitHub shows the PR merged, and it only switches to the base branch, pulls and deletes the task branch.
+- The end-to-end run of the skills (init, plan-phase, next-task, phase-review in a live session) is manual; see [testing/e2e-checklist.md](testing/e2e-checklist.md). CI runs the scripts and hooks, including an end-to-end run of the CLI and hooks in a real git repository (`test/e2e-cli.test.mjs`).

@@ -5,7 +5,8 @@ export function tierIndex(model, config) {
 }
 
 export function isBelowFloor(agentShortName, model, config) {
-  const floor = config.models.floors?.[agentShortName];
+  const floors = config.models.floors;
+  const floor = floors && Object.hasOwn(floors, agentShortName) ? floors[agentShortName] : undefined;
   if (!floor) return false;
   const floorIdx = tierIndex(floor, config);
   if (floorIdx < 0) return false;
@@ -15,7 +16,7 @@ export function isBelowFloor(agentShortName, model, config) {
 }
 
 export function route(risk, config) {
-  const r = config.routing[risk];
+  const r = Object.hasOwn(config.routing, risk) ? config.routing[risk] : undefined;
   if (!r) throw new Error(`unknown risk level: ${risk}`);
   return { implementer: { ...r.implementer }, reviewer: { ...r.reviewer } };
 }

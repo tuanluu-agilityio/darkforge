@@ -62,14 +62,18 @@ function fake(responses = {}) {
   };
 }
 
+const MERGED_LIST = 'gh pr list --head task/7-add-thing --base main --state merged --json number,headRefOid --jq .[] | "\\(.number) \\(.headRefOid)"';
 const PRECHECKS = [
   "git branch --show-current",
+  MERGED_LIST,
   "git rev-parse HEAD",
   STATUS,
   "git rev-parse HEAD",
   "git diff --name-only origin/main...HEAD",
 ];
-const noPushOrGh = (lines) => lines.every((l) => !l.startsWith("gh ") && !l.startsWith("git push") && !l.startsWith("git merge") && !l.startsWith("git switch"));
+// Local flow: no gh call at all. PR flow: only the read-only merged-PR lookup.
+const LOCAL_PRECHECKS = PRECHECKS.filter((l) => l !== MERGED_LIST);
+const noPushOrGh = (lines) => lines.every((l) => (!l.startsWith("gh ") || l === MERGED_LIST) && !l.startsWith("git push") && !l.startsWith("git merge") && !l.startsWith("git switch"));
 
 // ---------- start ----------
 
@@ -179,6 +183,8 @@ function setRunnerFor(f, pick) {
     "git rev-parse HEAD": { stdout: HEAD + "\n" },
     "git branch --show-current": { stdout: "task/7-add-thing\n" },
     [PRECHECKS.at(-1)]: { stdout: MB_DIFF },
+    "gh pr view 42 --json state --jq .state": { stdout: "MERGED\n" },
+    "gh pr view 9 --json state --jq .state": { stdout: "MERGED\n" },
     ...(f.extra ?? {}),
   };
   setRunner((cmd, args) => {
@@ -208,10 +214,11 @@ test("merge with PR + watch: checks, merge, switch, pull, delete local branch", 
     "gh pr create --base main --head task/7-add-thing --title Add thing --body <body>",
     "gh pr checks 42 --watch --required",
     `gh pr merge 42 --merge --delete-branch --match-head-commit ${HEAD}`,
+    "gh pr view 42 --json state --jq .state",
     "git switch main",
     "git pull --ff-only origin main",
     "git branch --list task/7-add-thing",
-    "git branch -d task/7-add-thing",
+    "git branch -D task/7-add-thing",
   ]);
   assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "7" });
 });
@@ -364,7 +371,7 @@ test("merge local (prFlow false, remote set): switch base, pull --ff-only, merge
   const r = mergeTask(root, "7", { title: "T" });
   assert.equal(r.ok, true, r.message);
   assert.deepEqual(f.lines(), [
-    ...PRECHECKS,
+    ...LOCAL_PRECHECKS,
     "git switch main",
     "git pull --ff-only origin main",
     "git merge --no-ff task/7-add-thing -m Merge task/7-add-thing",
@@ -399,7 +406,7 @@ test("merge local (remote null): diff against local base", () => {
   const f = fake({ "git diff --name-only dev...HEAD": { stdout: MB_DIFF } });
   assert.equal(mergeTask(root, "7", { title: "T" }).ok, true);
   assert.deepEqual(f.lines(), [
-    ...PRECHECKS.slice(0, 4),
+    ...LOCAL_PRECHECKS.slice(0, 4),
     "git diff --name-only dev...HEAD",
     "git switch dev",
     "git merge --no-ff task/7-add-thing -m Merge task/7-add-thing",
@@ -563,4 +570,62 @@ test("real git: start refuses an uncommitted change to the tracked .darkforge/co
   git(root, "checkout", "--", ".darkforge/config.json");
   fs.writeFileSync(path.join(root, ".darkforge", "gate.json"), "{}");
   assert.equal(startTask(root, "4", "demo").ok, true);
+});
+
+test("merge with PR + watch: merge accepted but PR not MERGED (merge queue) -> refuse, no cleanup, task state kept", () => {
+  const root = project({});
+  const f = prFake({ "gh pr view 42 --json state --jq .state": { stdout: "OPEN\n" } });
+  const r = mergeTask(root, "7", { title: "T" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /PR #42 is not merged yet \(state OPEN\)/);
+  assert.match(r.message, /merge queue/);
+  assert.equal(f.lines().at(-1), "gh pr view 42 --json state --jq .state");
+  assert.ok(!f.lines().includes("git switch main"));
+  assert.equal(readState(root).task, "7");
+});
+
+test("merge re-run after a queued PR landed (its head is this clean HEAD): cleanup only", () => {
+  const root = project({}, { gate: false });
+  const f = prFake({ [MERGED_LIST]: { stdout: `42 ${HEAD}\n` }, "git branch --list task/7-add-thing": { stdout: "* task/7-add-thing\n" } });
+  const r = mergeTask(root, "7", { title: "T" });
+  assert.equal(r.ok, true, r.message);
+  assert.deepEqual(f.lines(), [
+    "git branch --show-current",
+    MERGED_LIST,
+    "git rev-parse HEAD",
+    STATUS,
+    "git switch main",
+    "git pull --ff-only origin main",
+    "git branch --list task/7-add-thing",
+    "git branch -D task/7-add-thing",
+  ]);
+  assert.deepEqual(readState(root), { task: null, phase: null, lastTask: "7" });
+});
+
+test("merge: an older merged PR for a reused branch name never skips the checks or deletes the branch", () => {
+  const root = project({}, { gate: false });
+  const f = prFake({ [MERGED_LIST]: { stdout: "41 ffffffffffffffffffffffffffffffffffffffff\n" } });
+  const r = mergeTask(root, "7", { title: "T" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /gate has not passed/);
+  assert.ok(!f.lines().some((l) => l.startsWith("git branch -D") || l.startsWith("git switch")));
+  assert.equal(readState(root).task, "7");
+});
+
+test("merge: merged PR with this head but a dirty tree -> normal checks, nothing carried to main", () => {
+  const root = project({}, { gate: false });
+  const f = prFake({ [MERGED_LIST]: { stdout: `42 ${HEAD}\n` }, [STATUS]: { stdout: " M src/a.rs\n" } });
+  const r = mergeTask(root, "7", { title: "T" });
+  assert.equal(r.ok, false);
+  assert.ok(!f.lines().some((l) => l.startsWith("git switch")));
+  assert.equal(readState(root).task, "7");
+});
+
+test("merge re-run while the PR still waits in a merge queue: clear message, task stays active", () => {
+  const root = project({});
+  prFake({ [MERGE]: { code: 1, stderr: "X Pull request #42 is already queued to merge" } });
+  const r = mergeTask(root, "7", { title: "T" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /PR #42 is still waiting in a merge queue/);
+  assert.equal(readState(root).task, "7");
 });

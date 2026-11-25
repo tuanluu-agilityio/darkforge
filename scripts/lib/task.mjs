@@ -106,11 +106,31 @@ function prNumber(r) {
   return null;
 }
 
+/** Number of a merged PR from `branch` into the base whose head is the current, clean HEAD; else null. */
+function mergedPrForHead(root, git, branch) {
+  const list = run("gh", ["pr", "list", "--head", branch, "--base", git.baseBranch, "--state", "merged", "--json", "number,headRefOid", "--jq", '.[] | "\\(.number) \\(.headRefOid)"'], { cwd: root });
+  if (list.code !== 0) return null;
+  const prs = list.stdout.split(/\r?\n/).map((l) => l.trim().split(/\s+/)).filter(([n, sha]) => /^\d+$/.test(n ?? "") && sha);
+  if (!prs.length) return null;
+  const head = step(root, "git", ["rev-parse", "HEAD"]).stdout.trim();
+  const match = prs.find(([, sha]) => sha === head);
+  if (!match) return null;
+  const dirty = step(root, "git", ["status", "--porcelain", "--", ...DIRTY_PATHSPEC]).stdout.trim();
+  return dirty ? null : match[0];
+}
+
 /** Refuse unless all merge preconditions hold. Returns the branch name and the gated full SHA. */
 function checkPreconditions(root, git, id) {
   const branch = step(root, "git", ["branch", "--show-current"]).stdout.trim();
   if (!branch.startsWith(`task/${id}-`) || branch.length === `task/${id}-`.length) {
     throw new Stop(`refused: not on a task/${id}-* branch (current: ${branch || "detached HEAD"})`);
+  }
+  // A re-run after a queued merge landed: only the local cleanup is left (the diff vs base is empty now).
+  // Only when a merged PR's head is exactly this commit and the tree is clean: an older merged PR for a
+  // reused branch name must never let new work skip the checks or be deleted.
+  if (git.prFlow && git.remote) {
+    const n = mergedPrForHead(root, git, branch);
+    if (n) return { branch, alreadyMerged: n };
   }
   if (!gateFresh(root)) {
     throw new Stop("refused: gate has not passed on this commit with a clean tree; run `darkforge gate` after committing");
@@ -154,6 +174,17 @@ function waitForChecks(root, git, n) {
   }
 }
 
+/** After the PR merged: clear the task, switch to the updated base and drop the local task branch. */
+function cleanupAfterMerge(root, git, id, branch, n) {
+  const base = git.baseBranch;
+  writeState(root, { task: null, phase: null, lastTask: id });
+  step(root, "git", ["switch", base]);
+  step(root, "git", ["pull", "--ff-only", git.remote, base]);
+  // gh pr merge --delete-branch may already have removed the local branch.
+  if (step(root, "git", ["branch", "--list", branch]).stdout.trim()) step(root, "git", ["branch", "-D", branch]);
+  return { ok: true, message: `PR #${n} merged into ${base}; on ${base}, up to date` };
+}
+
 /**
  * Merge the current task branch into the base branch (PR flow or local), then clear the task state.
  * `lastTask` keeps the id so the next Stop hook still attributes this turn's orchestrator tokens to it.
@@ -164,8 +195,12 @@ export function mergeTask(root, id, { title } = {}) {
     validId(id);
     if (typeof title !== "string" || !title.trim()) throw new Stop("a non-empty --title is required");
     const git = config(root);
-    const { branch, head } = checkPreconditions(root, git, id);
+    const { branch, head, alreadyMerged } = checkPreconditions(root, git, id);
     const base = git.baseBranch;
+    if (alreadyMerged) {
+      merged = alreadyMerged;
+      return cleanupAfterMerge(root, git, id, branch, alreadyMerged);
+    }
 
     if (!git.prFlow || !git.remote) {
       step(root, "git", ["switch", base]);
@@ -205,15 +240,25 @@ export function mergeTask(root, id, { title } = {}) {
     }
 
     waitForChecks(root, git, n);
-    step(root, "gh", ["pr", "merge", n, method, "--delete-branch", ...pin]);
+    const mergeRun = run("gh", ["pr", "merge", n, method, "--delete-branch", ...pin], { cwd: root });
+    if (mergeRun.code !== 0) {
+      const why = output(mergeRun) || `exit ${mergeRun.code}`;
+      // A re-run while the PR still waits in a merge queue: say so instead of a raw gh error.
+      if (/queue/i.test(why)) {
+        throw new Stop(`PR #${n} is still waiting in a merge queue; the task stays active. Re-run "darkforge task merge ${id}" once GitHub shows it merged:\n${why}`);
+      }
+      throw new Stop(`gh pr merge failed:\n${why}`);
+    }
+    // With a merge queue, `gh pr merge` succeeds once the PR is queued; only MERGED means it landed.
+    const state = step(root, "gh", ["pr", "view", n, "--json", "state", "--jq", ".state"]).stdout.trim();
+    if (state !== "MERGED") {
+      throw new Stop(
+        `PR #${n} is not merged yet (state ${state || "unknown"}), probably waiting in a merge queue; ` +
+          `the task stays active. Once GitHub shows it merged, re-run "darkforge task merge ${id}" to finish the local cleanup.`,
+      );
+    }
     merged = n;
-    writeState(root, { task: null, phase: null, lastTask: id });
-
-    step(root, "git", ["switch", base]);
-    step(root, "git", ["pull", "--ff-only", git.remote, base]);
-    // gh pr merge --delete-branch may already have removed the local branch.
-    if (step(root, "git", ["branch", "--list", branch]).stdout.trim()) step(root, "git", ["branch", "-d", branch]);
-    return { ok: true, message: `PR #${n} merged into ${base}; on ${base}, up to date` };
+    return cleanupAfterMerge(root, git, id, branch, n);
   } catch (e) {
     if (!(e instanceof Stop)) throw e;
     return fail(merged ? `PR #${merged} merged, but local cleanup failed:\n${e.message}` : e.message);

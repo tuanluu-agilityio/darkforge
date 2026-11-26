@@ -120,7 +120,14 @@ nav .wrap{display:flex;align-items:center;gap:20px;height:64px}
 .cell{display:flex;flex-direction:column;gap:12px}
 .cell>p{color:var(--mut);font-size:15px}
 .cell .how{font-size:13px;color:var(--dim);border-top:1px solid var(--line);padding-top:10px;margin-top:auto}
-.w2{grid-column:span 2}.w3{grid-column:span 3}.w4{grid-column:span 4}
+.w2{grid-column:span 2}.w3{grid-column:span 3}.w4{grid-column:span 4}.w6{grid-column:span 6}
+.dash{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:10px}
+.dash .p{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--s1);display:grid;gap:6px;align-content:start}
+.dash .p b{font:500 12px var(--mono);color:var(--dim)}
+.dash .r{display:grid;grid-template-columns:3.2em minmax(0,1fr) auto;gap:8px;align-items:center;font-size:12px;color:var(--mut)}
+.dash .r i{display:block;height:8px;border-radius:3px}
+.dash .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+@media(max-width:620px){.dash{grid-template-columns:1fr}}
 @media(max-width:980px){.w2,.w3,.w4{grid-column:span 6}}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .seg button{min-height:38px;padding:0 14px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--mut);font:500 13px Geist,sans-serif;cursor:pointer}
@@ -338,6 +345,24 @@ footer nav{all:unset;display:flex;flex-wrap:wrap;gap:16px}
         <div class="viz"><div class="flow"><span class="pill">superpowers plan</span><span class="arr">→</span><span class="pill o">/darkforge:plan-phase</span><span class="arr">→</span><span class="pill">docs/tasks/*.md</span></div><div style="margin-top:10px" data-t="fSpTdd"></div></div>
         <p class="how" data-t="fSpHow"></p>
       </article>
+      <article class="card cell w6">
+        <h3 data-t="fDash"></h3><p data-t="fDashP"></p>
+        <div class="viz dash" aria-label="Illustrative dashboard">
+          <div class="p"><b>phase 2 · 4/7 done</b>
+            <div class="r"><span>010</span><span><span class="dot" style="background:var(--ok)"></span>done</span><span>100.4k</span></div>
+            <div class="r"><span>013</span><span><span class="dot" style="background:var(--ok)"></span>done · high</span><span>200.6k</span></div>
+            <div class="r"><span>014</span><span style="color:var(--acc)"><span class="dot" style="background:var(--acc)"></span>review</span><span>145.4k</span></div>
+            <div class="r"><span>016</span><span style="color:var(--err)"><span class="dot" style="background:var(--err)"></span>blocked · Q-04</span><span>—</span></div>
+          </div>
+          <div class="p"><b>tokens by task</b>
+            <div class="r"><span>013</span><i style="width:100%;background:linear-gradient(90deg,#60A5FA 0 44%,#A78BFA 44% 70%,var(--warn) 70% 84%,var(--acc) 84%)"></i><span></span></div>
+            <div class="r"><span>014</span><i style="width:72%;background:linear-gradient(90deg,#60A5FA 0 42%,#A78BFA 42% 69%,var(--warn) 69% 79%,var(--acc) 79%)"></i><span></span></div>
+            <b style="margin-top:6px">tasks per session</b>
+            <div style="font-size:12px;color:#FDE68A" data-t="fDashWarn"></div>
+          </div>
+        </div>
+        <p class="how" data-t="fDashHow"></p>
+      </article>
     </div>
   </div>
 </section>
@@ -473,6 +498,10 @@ fGitHow:{en:"With <code>git.autoMerge: true</code> the PR is handed to GitHub au
 fSp:{en:"Works with Superpowers, needs nothing",vi:"Chạy cùng Superpowers, không bắt buộc"},
 fSpP:{en:"DarkForge works standalone. With <code>superpowers: \"auto\"</code> and the superpowers plugin installed, it reuses its plans and TDD skill.",vi:"DarkForge chạy độc lập. Với <code>superpowers: \"auto\"</code> và plugin superpowers đã cài, nó dùng lại plan và skill TDD của superpowers."},
 fSpTdd:{en:"Implementers load superpowers' test-driven-development skill when available.",vi:"Implementer nạp skill test-driven-development của superpowers khi có."},
+fDash:{en:"Dashboard",vi:"Dashboard"},
+fDashP:{en:"<code>darkforge dashboard --open</code> writes one read-only HTML page from your project's files: phases and tasks with status and blocking questions, the next step, open questions, tokens by task and model, and how many tasks each session ran.",vi:"<code>darkforge dashboard --open</code> ghi ra một trang HTML chỉ đọc từ các file của dự án: phase và task kèm trạng thái và câu hỏi đang chặn, bước tiếp theo, câu hỏi mở, token theo task và model, và số task mỗi session đã chạy."},
+fDashWarn:{en:"1 session ran 5 tasks: start a fresh session before each task.",vi:"1 session đã chạy 5 task: hãy mở session mới trước mỗi task."},
+fDashHow:{en:"Illustrative data. The page is written to a private temp folder, never into the repository; it makes no network requests and shows every value as text. Or ask <code>/darkforge:status</code> for a visual view.",vi:"Dữ liệu minh họa. Trang được ghi vào thư mục tạm riêng, không bao giờ vào repository; không gọi mạng và hiển thị mọi giá trị dưới dạng chữ. Hoặc nhờ <code>/darkforge:status</code> cho xem dạng trực quan."},
 fSpHow:{en:"Set <code>superpowers</code> to <code>\"off\"</code> to ignore it. Credit: superpowers by Jesse Vincent (MIT).",vi:"Đặt <code>superpowers</code> là <code>\"off\"</code> để bỏ qua. Ghi công: superpowers của Jesse Vincent (MIT)."},
 whyH:{en:"Why it works: every mechanism removes one way a long session goes wrong.",vi:"Vì sao hiệu quả: mỗi cơ chế loại bỏ một cách khiến phiên dài đi sai."},
 whyLead:{en:"No benchmarks. The one number below is from a single measured run, recorded in the repository with how it was taken.",vi:"Không có benchmark. Con số duy nhất bên dưới lấy từ một lần đo, được ghi lại trong repository kèm cách đo."},
@@ -509,7 +538,7 @@ pause:{en:"Pause",vi:"Tạm dừng"},play:{en:"Play",vi:"Chạy"},done:{en:"Done
 
 /* ---------- data ---------- */
 /* first fact: the latest released version, replaced from CHANGELOG.md once it loads */
-const FACTS=[[{en:"v0.2.0",vi:"v0.2.0"},{en:"MIT licensed",vi:"Giấy phép MIT"}],[{en:"Zero npm dependencies",vi:"Không có npm dependency"},{en:"Node 18+, git; gh optional",vi:"Node 18+, git; gh tùy chọn"}],[{en:"Windows, macOS, Linux",vi:"Windows, macOS, Linux"},{en:"CI on all three",vi:"CI trên cả ba"}],[{en:"No telemetry",vi:"Không telemetry"},{en:"Network only through git and gh",vi:"Chỉ dùng mạng qua git và gh"}]];
+const FACTS=[[{en:"v0.3.0",vi:"v0.3.0"},{en:"MIT licensed",vi:"Giấy phép MIT"}],[{en:"Zero npm dependencies",vi:"Không có npm dependency"},{en:"Node 18+, git; gh optional",vi:"Node 18+, git; gh tùy chọn"}],[{en:"Windows, macOS, Linux",vi:"Windows, macOS, Linux"},{en:"CI on all three",vi:"CI trên cả ba"}],[{en:"No telemetry",vi:"Không telemetry"},{en:"Network only through git and gh",vi:"Chỉ dùng mạng qua git và gh"}]];
 const RAIL=[{en:"Pick",vi:"Chọn task"},{en:"Begin",vi:"Bắt đầu"},{en:"Implement",vi:"Thực hiện"},{en:"Review",vi:"Review"},{en:"Fix round",vi:"Vòng sửa"},{en:"Memory bank",vi:"Memory bank"},{en:"Finish: lint, gate, merge",vi:"Finish: lint, gate, merge"},{en:"Report",vi:"Báo cáo"}];
 const LOG=[
  [0,"c","> /darkforge:next-task"],
@@ -593,6 +622,7 @@ const FAQ=[
  [{en:"What happens when the gate fails?",vi:"Gate thất bại thì sao?"},{en:"The failing lines go back to the implementer as a fix round. The merge also refuses a stale gate, so nothing merges unless the gate passed on that exact commit.",vi:"Các dòng lỗi được gửi lại implementer như một vòng sửa. Merge cũng từ chối gate cũ, nên không gì được merge nếu gate chưa pass trên đúng commit đó."}],
  [{en:"Can it resume after I restart Claude Code?",vi:"Khởi động lại Claude Code thì có tiếp tục được không?"},{en:"Yes. The session brief names the current task, and next-task continues on its branch from the first step not yet done.",vi:"Được. Bản tóm tắt đầu phiên nêu task hiện tại, và next-task tiếp tục trên branch đó từ bước đầu tiên chưa làm."}],
  [{en:"Can I run several tasks in one session?",vi:"Có chạy nhiều task trong một session được không?"},{en:"You can, but every later model call re-reads the earlier tasks. <code>next-task</code> ends by asking for a fresh session (<code>/clear</code>); the memory bank carries what the next task needs.",vi:"Được, nhưng mỗi lần gọi model sau đó sẽ đọc lại các task trước. <code>next-task</code> kết thúc bằng lời nhắc mở session mới (<code>/clear</code>); memory bank mang theo những gì task sau cần."}],
+ [{en:"Is there a visual view of the project?",vi:"Có giao diện trực quan để xem dự án không?"},{en:"Yes. <code>darkforge dashboard --open</code>, or ask <code>/darkforge:status</code> for a visual view. It writes a read-only HTML page to a private temp folder and opens it; nothing in the repository changes. It is a view, not a control panel: work still runs in Claude Code.",vi:"Có. <code>darkforge dashboard --open</code>, hoặc nhờ <code>/darkforge:status</code> cho xem dạng trực quan. Lệnh ghi một trang HTML chỉ đọc vào thư mục tạm riêng rồi mở nó; repository không thay đổi gì. Đây là trang để xem, không phải bảng điều khiển: công việc vẫn chạy trong Claude Code."}],
  [{en:"Does it collect telemetry?",vi:"Nó có thu thập telemetry không?"},{en:"No. The plugin uses the network only through <code>git</code> and <code>gh</code>. The ledger file is local and git-ignored. Claude Code, GitHub and your CI have their own policies.",vi:"Không. Plugin chỉ dùng mạng qua <code>git</code> và <code>gh</code>. File ledger nằm ở local và bị git-ignore. Claude Code, GitHub và CI của bạn có chính sách riêng của chúng."}],
  [{en:"Is the token report an exact bill?",vi:"Báo cáo token có phải hóa đơn chính xác không?"},{en:"No. It is best effort, read from transcripts by hooks. It may miss the last turn of a session, and totals include cheaper cache reads.",vi:"Không. Đây là số liệu ước tính tốt nhất, do hook đọc từ transcript. Nó có thể bỏ sót lượt cuối của phiên, và tổng có gồm cache read vốn rẻ hơn."}]
 ];

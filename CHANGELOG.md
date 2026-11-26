@@ -1,11 +1,17 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.0] - 2026-11-26
 
 ### Added
 
 - `darkforge dashboard [--out <file>] [--open]`: one read-only HTML page of the project (phases, tasks with status and blocking questions, task details, next step, open questions, tokens by task, model and orchestrator vs subagents, tasks per session, decisions, backlog), built from the project's files. Written to the OS temp dir by default, so the working tree never changes; no network requests; every value shown as text. `/darkforge:status` offers it for a visual view.
 - Ledger records carry the Claude Code `session` id, so the dashboard can show when one session ran several tasks.
+
+### Known issues
+
+- The dashboard's tasks-per-session panel needs ledger records with a session id, recorded from this version on.
+- `dashboard --open` on Windows may not open a path that contains a comma (it fails safely; the path is printed).
+- End-to-end checklist run B (with superpowers) has not been done yet; token ledger is best effort.
 
 ## [0.2.0] - 2026-11-26
 

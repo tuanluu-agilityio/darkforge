@@ -84,9 +84,14 @@ export function startLiveServer(
       }
       return;
     }
+    const recovered = lastFailed !== null;
     lastFailed = null;
     const key = embedKey(data);
-    if (lastEvent && lastEvent.key === key) return;
+    if (lastEvent && lastEvent.key === key) {
+      // The page hides its failure banner only on a data event, so say so again after a recovery.
+      if (recovered) broadcast(lastEvent.frame);
+      return;
+    }
     lastEvent = { key, frame: `data: ${embedJson(data)}\n\n` };
     broadcast(lastEvent.frame);
   }

@@ -83,7 +83,13 @@ function stream(t, s) {
       waiters.add(check);
       check();
     });
-  st.datas = () => st.text.split("\n").filter((l) => l.startsWith("data: ")).map((l) => l.slice(6));
+  st.frames = () =>
+    st.text
+      .split("\n\n")
+      .filter((f) => f.trim() !== "" && !f.startsWith(":"))
+      .map((f) => ({ named: /^event: /m.test(f), data: f.split("\n").filter((l) => l.startsWith("data: ")).map((l) => l.slice(6)).join("\n") }));
+  // payloads of unnamed (data) events only
+  st.datas = () => st.frames().filter((f) => !f.named).map((f) => f.data);
   t.after(() => st.req.destroy());
   return st;
 }
@@ -161,8 +167,13 @@ test("collect error is pushed and the server recovers", async (t) => {
   fs.writeFileSync(cfg, "{ not json");
   await st.wait((x) => x.includes("event: failed\ndata: "));
   fs.writeFileSync(cfg, good);
-  await st.wait(() => st.datas().length >= 2);
+  await st.wait(() => {
+    const f = st.frames();
+    const i = f.findIndex((x) => x.named);
+    return i >= 0 && f.slice(i + 1).some((x) => !x.named);
+  });
   assert.equal(st.text.split("event: failed").length, 2, "failed sent once");
+  assert.ok(st.frames().at(-1).named === false, "last frame is data");
 });
 
 test("idle poll does not collect", async (t) => {
@@ -171,6 +182,7 @@ test("idle poll does not collect", async (t) => {
   const st = stream(t, s);
   await st.ready;
   await st.wait(() => st.datas().length >= 1);
+  await sleep(150); // let late watcher events from the fixture writes settle
   const before = n;
   assert.ok(before >= 1);
   await sleep(300);
@@ -199,9 +211,15 @@ test("closed streams free their slot", async (t) => {
     open.push(st);
   }
   for (const st of open) st.req.destroy();
-  await sleep(50);
-  const again = stream(t, s);
-  await again.ready;
+  // the server notices the client closes asynchronously: retry the connection until a slot is free
+  let again;
+  for (const deadline = Date.now() + 2000; ; ) {
+    again = stream(t, s);
+    await again.ready;
+    if (again.status === 200 || Date.now() > deadline) break;
+    again.req.destroy();
+    await sleep(20);
+  }
   assert.equal(again.status, 200);
   const errors = [];
   const onErr = (e) => errors.push(e);

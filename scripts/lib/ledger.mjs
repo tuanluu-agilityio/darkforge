@@ -72,10 +72,12 @@ export function sumUsage(jsonlText, fromLine = 0, skipId = null) {
 }
 
 /** Append one record as one JSON line. Never rewrites the file (concurrent subagents append). */
-export function appendRecord(root, { at, task, phase, kind, agent, model, tokens, usage }) {
+export function appendRecord(root, { at, task, phase, kind, agent, model, tokens, usage, session }) {
   fs.mkdirSync(path.join(root, ".darkforge"), { recursive: true });
   const rec = { at, task: task ?? null, phase: phase ?? null, kind, agent: agent ?? null, model: model ?? null, tokens };
   if (isObj(usage)) rec.usage = usage;
+  // The Claude Code session the tokens came from, so a report can tell tasks run in one session apart.
+  if (typeof session === "string" && session !== "") rec.session = session;
   fs.appendFileSync(ledgerFile(root), JSON.stringify(rec) + "\n");
 }
 
@@ -167,8 +169,9 @@ function countNew(root, transcriptPath) {
   return r;
 }
 
-function record(root, now, fields, r) {
-  const rec = { at: now.toISOString(), ...fields, model: r.model, tokens: r.tokens, usage: r.usage };
+function record(root, now, fields, r, input) {
+  const session = typeof input?.session_id === "string" && input.session_id !== "" ? input.session_id : undefined;
+  const rec = { at: now.toISOString(), ...fields, model: r.model, tokens: r.tokens, usage: r.usage, ...(session ? { session } : {}) };
   appendRecord(root, rec);
   return rec;
 }
@@ -179,7 +182,7 @@ export function recordSubagentStop(root, input, now = new Date()) {
   if (!r || r.tokens === 0) return null;
   const state = readState(root);
   const agent = typeof input.agent_type === "string" && input.agent_type !== "" ? input.agent_type : null;
-  return record(root, now, { task: state.task, phase: state.phase, kind: "subagent", agent }, r);
+  return record(root, now, { task: state.task, phase: state.phase, kind: "subagent", agent }, r, input);
 }
 
 /**
@@ -191,7 +194,7 @@ export function recordStop(root, input, now = new Date()) {
   if (!r || r.tokens === 0) return null;
   const state = readState(root);
   const task = state.task ?? state.lastTask ?? null;
-  const rec = record(root, now, { task, phase: "orchestrator", kind: "orchestrator", agent: null }, r);
+  const rec = record(root, now, { task, phase: "orchestrator", kind: "orchestrator", agent: null }, r, input);
   if (state.lastTask) writeState(root, { lastTask: null });
   return rec;
 }

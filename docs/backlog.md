@@ -13,3 +13,4 @@ Deferred findings. Items marked (T<N>) come from the 0.1.0 build review.
 - (T9) gateFresh could return the SHA it validated (tiny race between gateFresh and rev-parse)
 - (T10) builder/scaffolder/specialist share steps (3 places to fix); "model is a default" line costs tokens
 - (T11) phase-review third-review id detection relies on P<N>R2 progress row
+- dashboard --open on Windows: explorer.exe treats a comma as a separator, so a path with a comma may not open (fails safely; the path is printed).

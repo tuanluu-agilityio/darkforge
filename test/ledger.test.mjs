@@ -227,7 +227,19 @@ test("SubagentStop records the subagent transcript with task and phase from stat
     model: "claude-sonnet-4-6",
     tokens: 500,
     usage: { input: 150, output: 100, cacheWrite: 50, cacheRead: 200 },
+    session: "abc123",
   });
+});
+
+test("records carry the session id only when the hook input has one", async () => {
+  const { appendRecord } = await import("../scripts/lib/ledger.mjs");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "df session "));
+  appendRecord(dir, { at: "x", task: "1", phase: "implement", kind: "subagent", tokens: 5, session: "s9" });
+  appendRecord(dir, { at: "x", task: "1", phase: "implement", kind: "subagent", tokens: 5, session: "" });
+  appendRecord(dir, { at: "x", task: "1", phase: "implement", kind: "subagent", tokens: 5 });
+  const lines = fs.readFileSync(path.join(dir, ".darkforge", "ledger.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.deepEqual(lines.map((r) => r.session), ["s9", undefined, undefined]);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("resumed subagent: second SubagentStop records only new lines; transcripts keep separate offsets", () => {

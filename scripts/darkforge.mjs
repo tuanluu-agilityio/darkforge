@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { pathToFileURL } from "node:url";
+import { dashboardCommand } from "./lib/dashboard.mjs";
 import { doctor } from "./lib/doctor.mjs";
 import { gateCommand } from "./lib/gate.mjs";
 import { ledgerCommand } from "./lib/ledger.mjs";
@@ -9,6 +10,7 @@ import { taskCommand } from "./lib/task.mjs";
 
 /** Command registry: name -> async (args, ctx) => exit code. Later tasks add entries here. */
 export const commands = {
+  dashboard: dashboardCommand,
   gate: gateCommand,
   init: initCommand,
   ledger: ledgerCommand,

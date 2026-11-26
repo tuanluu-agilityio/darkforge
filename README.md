@@ -37,7 +37,7 @@ No npm dependencies, no network access except `git` and `gh`, no telemetry.
 2. `/darkforge:plan-phase`: plan the first phase and its task packages.
 3. `/darkforge:next-task`: run one task end to end; then `/clear` and repeat.
 4. `/darkforge:phase-review`: close the phase.
-5. `/darkforge:status` at any time.
+5. `/darkforge:status` at any time; ask it for a visual view, or run `darkforge dashboard --open`, for a one-page HTML dashboard.
 
 Read the [user guide](docs/user-guide.md), the [config reference](docs/config.md) and a [worked example](docs/example-dark-clipboard.md).
 

@@ -48,6 +48,15 @@ Inside `next-task`, two CLI commands do the mechanical steps, so the main sessio
 
 `task start` and `task merge` remain for `plan-phase` and `phase-review` and for manual use.
 
+## Dashboard
+
+`node "<plugin dir>/scripts/darkforge.mjs" dashboard --open` (or ask `/darkforge:status` for a visual view) writes one read-only HTML page and opens it: phases and their tasks with status, risk, models, dependencies and blocking questions; task details (acceptance, tests, tokens); the next step; open questions; tokens by task, by model and orchestrator vs subagents; tasks per Claude Code session; recent decisions and the backlog. Each panel names the file it was read from.
+
+- It reads only the project's files (config, `.darkforge/state.json`, `memory-bank/`, `docs/plans/phase-*.md`, `.darkforge/ledger.jsonl`) and writes only the page.
+- The page goes to the OS temp directory (one file per project), so the working tree never changes; `--out <file.html>` writes it elsewhere.
+- The page makes no network requests (system fonts, data inline) and runs no code from your files: every value is shown as text.
+- Run the command again to refresh it. "Tasks per session" needs ledger records with a session id, which darkforge records from this version on.
+
 ## Keeping token use down
 
 The first live end-to-end run (`docs/testing/e2e-checklist.md`, run A) measured where tokens go: the main session (the one you type in) used 85% of them, the subagents 15%, and 93% of all tokens were cache reads. Each model call of the main session re-reads its whole context, so its cost is roughly the number of calls times the context size.

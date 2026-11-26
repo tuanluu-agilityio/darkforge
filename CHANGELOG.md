@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.1] - 2026-11-26
+## [Unreleased]
 
 ### Changed
 
@@ -15,7 +15,7 @@
 
 - User guide: "Keeping token use down", with the measured split and what drives it.
 
-## [Unreleased]
+## [0.1.1] - 2026-11-26
 
 ### Fixed
 

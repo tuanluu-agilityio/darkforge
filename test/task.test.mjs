@@ -77,6 +77,8 @@ const noPushOrGh = (lines) => lines.every((l) => (!l.startsWith("gh ") || l === 
 
 // ---------- start ----------
 
+const withoutSince = ({ since, ...rest }) => (typeof since === "string" ? rest : { ...rest, since });
+
 test("start (clean, remote): fetch, check local+remote, branch from remote base, state set", () => {
   const root = project({}, { task: null });
   const f = fake();
@@ -89,7 +91,7 @@ test("start (clean, remote): fetch, check local+remote, branch from remote base,
     "git branch -r --list origin/task/7-*",
     "git switch -c task/7-add-thing origin/main",
   ]);
-  assert.deepEqual(readState(root), { task: "7", phase: "implement" });
+  assert.deepEqual(withoutSince(readState(root)), { task: "7", phase: "implement" });
   assert.match(r.message, /task\/7-add-thing/);
 });
 
@@ -98,7 +100,7 @@ test("start clears lastTask left by the previous merge", () => {
   writeState(root, { lastTask: "6" });
   fake();
   assert.equal(startTask(root, "7", "add-thing").ok, true);
-  assert.deepEqual(readState(root), { task: "7", phase: "implement" });
+  assert.deepEqual(withoutSince(readState(root)), { task: "7", phase: "implement" });
 });
 
 test("start (clean, no remote): branch from local base, no fetch", () => {

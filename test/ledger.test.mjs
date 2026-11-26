@@ -129,7 +129,9 @@ test("writeState creates .darkforge, merges, and drops a legacy offsets key", ()
   const root = tmpProject(false);
   writeState(root, { task: "006-ledger" });
   writeState(root, { phase: "implement" });
-  assert.deepEqual(readState(root), { task: "006-ledger", phase: "implement" });
+  const { since, ...state } = readState(root);
+  assert.equal(typeof since, "string");
+  assert.deepEqual(state, { task: "006-ledger", phase: "implement" });
   const file = path.join(root, ".darkforge", "state.json");
   fs.writeFileSync(file, JSON.stringify({ task: "T", phase: "fix", offsets: { a: 1 } }));
   assert.deepEqual(readState(root), { task: "T", phase: "fix" });

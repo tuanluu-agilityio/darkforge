@@ -108,7 +108,15 @@ test("begin: starts the branch from the package and prints who does what", (t) =
     "task 001 started on task/001-demo (risk medium)\nimplementer: darkforge:builder model sonnet\nreviewer: darkforge:reviewer model opus\nbase: main",
   );
   assert.equal(git(root, "branch", "--show-current"), "task/001-demo");
-  assert.deepEqual(readState(root), { task: "001", phase: "implement" });
+  const { since, ...state } = readState(root);
+  assert.equal(typeof since, "string");
+  assert.deepEqual(state, {
+    task: "001",
+    phase: "implement",
+    implementer: { agent: "builder", model: "sonnet" },
+    reviewer: { agent: "reviewer", model: "opus" },
+    round: 0,
+  });
 });
 
 test("begin: resumes on the same branch without starting again", (t) => {

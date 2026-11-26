@@ -204,15 +204,19 @@ export function collect(root, now = new Date()) {
   };
 }
 
-/** The page: the template with the data embedded as JSON that cannot close the script element. */
-export function render(data, { live = false } = {}) {
-  const template = fs.readFileSync(path.join(PLUGIN_ROOT, "templates", "dashboard.html"), "utf8");
-  // "<" is written as an escape, so no "</script>" in the data can end the element; U+2028/2029 likewise.
+/** JSON for embedding in a script element or an SSE line: "<" and U+2028/2029 are written as escapes, so it stays one line and cannot close the element. */
+export function embedJson(data) {
   const bs = String.fromCharCode(92); // a backslash, spelled out
-  const json = JSON.stringify(data)
+  return JSON.stringify(data)
     .replaceAll("<", bs + "u003c")
     .replaceAll(String.fromCharCode(0x2028), bs + "u2028")
     .replaceAll(String.fromCharCode(0x2029), bs + "u2029");
+}
+
+/** The page: the template with the data embedded as JSON that cannot close the script element. */
+export function render(data, { live = false } = {}) {
+  const template = fs.readFileSync(path.join(PLUGIN_ROOT, "templates", "dashboard.html"), "utf8");
+  const json = embedJson(data);
   if (!template.includes("/*DARKFORGE_DATA*/null")) throw new Error("dashboard template has no data placeholder");
   if (!template.includes("/*DARKFORGE_LIVE*/false")) throw new Error("dashboard template has no live placeholder");
   // The flag first: the data is project text and could itself contain the flag's placeholder.
@@ -246,7 +250,7 @@ function privateDir(dir) {
 }
 
 /** Open the page in the default browser. No shell: the path is one argument (no &, | or %VAR% on Windows). */
-function openFile(file, ctx) {
+export function openFile(file, ctx) {
   const [cmd, args] =
     process.platform === "win32" ? ["explorer.exe", [file]] : process.platform === "darwin" ? ["open", [file]] : ["xdg-open", [file]];
   const say = () => ctx.stdout("could not open a browser; open the file above\n");
@@ -259,24 +263,33 @@ function openFile(file, ctx) {
   }
 }
 
-const USAGE = "usage: darkforge dashboard [--out <file.html>] [--open]\n";
+const USAGE = "usage: darkforge dashboard [--out <file.html>] [--open] | darkforge dashboard --watch [--open] [--port <n>]\n";
 
 export async function dashboardCommand(args, ctx) {
   let out = null;
   let open = false;
+  let watch = false;
+  let port = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--open") open = true;
+    else if (args[i] === "--watch") watch = true;
     else if (args[i] === "--out" && args[i + 1]) out = args[++i];
+    else if (args[i] === "--port" && /^\d{1,5}$/.test(args[i + 1] ?? "") && Number(args[i + 1]) <= 65535) port = Number(args[++i]);
     else {
       ctx.stderr(USAGE);
       return 1;
     }
+  }
+  if ((watch && out !== null) || (port !== null && !watch)) {
+    ctx.stderr(USAGE);
+    return 1;
   }
   const root = findProjectRoot(ctx.cwd);
   if (!root) {
     ctx.stderr("darkforge: no .darkforge/config.json found in this directory or its parents\n");
     return 1;
   }
+  if (watch) return watchCommand(root, { open, port: port ?? 0 }, ctx);
   let html;
   try {
     html = render(collect(root));
@@ -295,5 +308,29 @@ export async function dashboardCommand(args, ctx) {
   }
   ctx.stdout(`dashboard: ${file}\n`);
   if (open) openFile(file, ctx);
+  return 0;
+}
+
+async function watchCommand(root, { open, port }, ctx) {
+  const { startLiveServer } = await import("./dashboard-server.mjs");
+  let server;
+  try {
+    server = await startLiveServer(root, { port });
+  } catch (e) {
+    ctx.stderr(`darkforge: ${e.message}\n`);
+    return 1;
+  }
+  ctx.stdout(`dashboard: ${server.url}\n`);
+  if (open) openFile(server.url, ctx);
+  await new Promise((resolve) => {
+    const stop = () => {
+      process.off("SIGINT", stop);
+      process.off("SIGTERM", stop);
+      resolve();
+    };
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
+  });
+  await server.close();
   return 0;
 }

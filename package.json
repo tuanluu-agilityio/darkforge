@@ -1,6 +1,6 @@
 {
   "name": "darkforge",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Spec-driven, token-economical project workflow for Claude Code.",
   "type": "module",
   "license": "MIT",

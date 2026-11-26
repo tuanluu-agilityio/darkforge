@@ -261,7 +261,7 @@ function renderNow(){
   $("#now").innerHTML=chip("task "+cur,"run")+chip("phase: "+(st.phase||"-"))+(who?chip(who):"")+(since?chip(since):"")+(st.round>0?chip(V("fix round ","vòng sửa ")+st.round):"");
 }
 /* live mode: connection indicator and the last-good-data banner */
-let conn=null,lastAt=null;
+let conn=null,lastAt=null,lastRaw=null;
 function paintLive(){
   const el=$("#live");el.hidden=!LIVE||!conn;if(el.hidden)return;
   el.className="livei"+(conn==="ok"?"":" down");
@@ -294,11 +294,16 @@ if(LIVE){
   es.addEventListener("open",()=>{conn="ok";stamp();paintLive();});
   es.addEventListener("error",()=>{conn="down";paintLive();});
   es.addEventListener("message",e=>{
+    conn="ok";stamp();$("#failBanner").hidden=true;paintLive();
+    if(e.data===lastRaw)return; /* unchanged: no re-render, so focus and the live region stay put */
     let d;try{d=JSON.parse(e.data);}catch{return;}
-    const y=scrollY;DATA=d;led=d.ledger;
+    lastRaw=e.data;
+    const y=scrollY,ae=document.activeElement,fk=ae&&ae.closest?["data-id","data-f","data-p"].map(n=>{const c=ae.closest("["+n+"]");return c&&[n,c.getAttribute(n)];}).find(Boolean):null;
+    DATA=d;led=d.ledger;
     if(!phase())phaseN=DATA.current;
     if(!(phase()?.tasks||[]).some(x=>x.id===sel))sel=firstPick();
-    conn="ok";stamp();$("#failBanner").hidden=true;render();scrollTo(0,y);
+    render();scrollTo(0,y);
+    if(fk){const n=[...document.querySelectorAll("["+fk[0]+"]")].find(x=>x.getAttribute(fk[0])===fk[1]);n&&n.focus();}
   });
   es.addEventListener("failed",e=>{$("#failBanner").textContent=e.data;$("#failBanner").hidden=false;});
   setInterval(renderNow,3e4);

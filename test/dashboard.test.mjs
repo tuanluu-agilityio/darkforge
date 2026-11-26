@@ -209,3 +209,21 @@ test("waiting questions render as text", (t) => {
   assert.ok(!html.includes("</script><img"));
   assert.equal((html.match(/<\/script>/g) ?? []).length, 1);
 });
+
+test("template: EventSource only inside the if(LIVE) block; waiting questions escaped; focus kept on update", () => {
+  const tpl = fs.readFileSync(new URL("../templates/dashboard.html", import.meta.url), "utf8");
+  const script = tpl.match(/<script>([\s\S]*)<\/script>/)[1];
+  const open = script.indexOf("if(LIVE){") + "if(LIVE)".length;
+  let depth = 0;
+  let end = open;
+  for (let i = open; i < script.length; i++) {
+    if (script[i] === "{") depth++;
+    else if (script[i] === "}" && --depth === 0) { end = i; break; }
+  }
+  const block = script.slice(open, end);
+  assert.ok(block.includes('new EventSource("events")'));
+  assert.equal(script.replace(block, "").includes("EventSource"), false, "no EventSource outside the live block");
+  assert.match(script, /wq\.map\(q=>[^\n]*\$\{esc\(q\)\}/, "waiting questions go through esc()");
+  assert.match(block, /e\.data===lastRaw/, "unchanged payloads skip the render");
+  assert.match(block, /\.focus\(\)/, "focus is restored after a render");
+});

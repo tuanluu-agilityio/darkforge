@@ -58,11 +58,15 @@ for (const n of MODEL_ONLY) {
   });
 }
 
-test('next-task: same implementer via SendMessage, ledger phases, task start/merge', () => {
+test('next-task: task begin/finish, same implementer via SendMessage, fix-round phases, fresh session', () => {
   const t = read('next-task');
-  for (const s of ['SendMessage', 'ledger phase implement', 'ledger phase review', 'ledger phase fix',
-    'ledger phase orchestrator', 'task start', 'task merge', 'memory lint', 'ledger report', 'model-routing']) {
+  for (const s of ['df task begin NNN', 'df task finish NNN --title', 'SendMessage', 'ledger phase review', 'ledger phase fix',
+    'memory lint', 'next: fix round', 'model-routing', '/clear']) {
     assert.ok(t.includes(s), `next-task lacks "${s}"`);
+  }
+  // Mechanical steps belong to the CLI now: the skill must not run them one by one.
+  for (const s of ['df task start', 'df task merge', 'df gate', 'df ledger report', 'git add memory-bank']) {
+    assert.ok(!t.includes(s), `next-task still runs "${s}" itself`);
   }
 });
 

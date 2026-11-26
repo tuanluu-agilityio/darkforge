@@ -35,7 +35,7 @@ Load `task-package-writing`; write one package per task in `docs/tasks/`.
 - `memory-bank/decisions.md`: one line per new decision.
 - `memory-bank/progress.md`: row `| P<N> | task/P<N>-plan | orchestrator | - | done | - |`.
 - `memory-bank/activeContext.md`: `## Where we are` = phase N planned; `## Next` = the first task with no open dependency; keep open `Q-NN` rows.
-- Stage only `git add docs/plans docs/tasks memory-bank/` (plus `docs/superpowers/` with the spec and plan, if used); never `git add -A` or `.`. Commit `docs: phase N plan`. `df memory lint` must print `memory: ok`.
-- `df gate`, `df ledger phase orchestrator`, `df task merge P<N> --title "Phase N plan"`. If a command refuses, fix what it names and re-run.
+- Stage only `git add docs/plans docs/tasks` (plus `docs/superpowers/` with the spec and plan, if used); never `git add -A` or `.`. Commit `docs: phase N plan`.
+- `df task finish P<N> --title "Phase N plan"`: commits `memory-bank/`, `memory lint`, gate, merge. If it stops, fix what it names and re-run.
 
 Tell the owner, briefly: the task table (id, title, risk, models), open questions, and `/darkforge:next-task` to start.

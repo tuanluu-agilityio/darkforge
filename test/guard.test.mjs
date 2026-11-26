@@ -245,7 +245,7 @@ test("hooks.json registers model-guard in exec form and runs from a plugin root 
 
   // Simulate Claude Code: copy the plugin files under a root with a space and substitute the placeholder.
   const pluginRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "darkforge plugin ")), "plug in");
-  for (const rel of ["hooks/model-guard.mjs", "scripts/lib/guard.mjs", "scripts/lib/config.mjs", "scripts/lib/models.mjs"]) {
+  for (const rel of ["hooks/model-guard.mjs", "scripts/lib/guard.mjs", "scripts/lib/config.mjs", "scripts/lib/models.mjs", "scripts/lib/state.mjs"]) {
     fs.mkdirSync(path.dirname(path.join(pluginRoot, rel)), { recursive: true });
     fs.copyFileSync(path.join(repo, rel), path.join(pluginRoot, rel));
   }
@@ -254,4 +254,29 @@ test("hooks.json registers model-guard in exec form and runs from a plugin root 
   const r = runHook(withCwd(fixture("agent-banned-model.json"), dir), dir, process.execPath, args);
   assert.equal(r.code, 0, r.stderr);
   assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, "deny");
+});
+
+test("dispatchPhase: implementer agents start implement, reviewer agents review, others nothing", async () => {
+  const { dispatchPhase } = await import("../scripts/lib/guard.mjs");
+  for (const a of ["builder", "specialist", "scaffolder"]) assert.equal(dispatchPhase({ subagent_type: `darkforge:${a}` }), "implement");
+  for (const a of ["reviewer", "security-reviewer"]) assert.equal(dispatchPhase({ subagent_type: `darkforge:${a}` }), "review");
+  for (const t of ["darkforge:verifier", "general-purpose", "darkforge:constructor", "darkforge:__proto__", ""]) assert.equal(dispatchPhase({ subagent_type: t }), null);
+  assert.equal(dispatchPhase(null), null);
+});
+
+test("hook: allowed dispatches set the phase during a task; an implementer during a fix round keeps fix", async () => {
+  const { writeState, readState } = await import("../scripts/lib/state.mjs");
+  const dir = tmpDir({ schemaVersion: 1 });
+  const call = (subagent_type) =>
+    runHook({ session_id: "s", cwd: dir, hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: { subagent_type, model: "opus", prompt: "x" } }, dir);
+  call("darkforge:reviewer");
+  assert.equal(readState(dir).phase, null, "no active task: state untouched");
+  writeState(dir, { task: "7", phase: "implement" });
+  call("darkforge:reviewer");
+  assert.equal(readState(dir).phase, "review");
+  writeState(dir, { phase: "fix" });
+  call("darkforge:specialist");
+  assert.equal(readState(dir).phase, "fix");
+  call("darkforge:security-reviewer");
+  assert.equal(readState(dir).phase, "review");
 });

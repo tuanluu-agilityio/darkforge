@@ -107,3 +107,13 @@ export function decide(toolInput, config) {
 
   return ALLOW;
 }
+
+const PHASE_OF = { builder: "implement", specialist: "implement", scaffolder: "implement", reviewer: "review", "security-reviewer": "review" };
+
+/** Ledger phase an allowed dispatch starts: implementer agents -> implement, reviewer agents -> review, others -> null. */
+export function dispatchPhase(toolInput) {
+  const type = isObj(toolInput) && typeof toolInput.subagent_type === "string" ? toolInput.subagent_type : "";
+  if (!type.startsWith(PREFIX)) return null;
+  const name = type.slice(PREFIX.length);
+  return Object.hasOwn(PHASE_OF, name) ? PHASE_OF[name] : null;
+}

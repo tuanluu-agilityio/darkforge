@@ -34,6 +34,7 @@ Install superpowers; write a two-task plan with its planning skill into `docs/su
 | Date | OS | Node | Claude Code | Plugin commit | Run | Result | Notes |
 |---|---|---|---|---|---|---|---|
 | 2026-11-25 | Windows 11 | 24.20.0 | 2.1.332 | 5a5efbd | A | pass, all 9 items | Run headless: `claude -p --plugin-dir <clone>`, owner answers given with `--resume`; superpowers installed but `superpowers: "off"`; local merge, no remote; `core.autocrlf=true`. Found: merged task branches kept after local merges (fixed after the run); init applied before the owner OK'd the summary (skill wording fixed); this checklist named the wrong phase-review agent (fixed). |
+| 2026-11-26 | Windows 11 | 24.20.0 | 2.1.332 | 3c6b87e | A (next-task only) | pass, next-task ×2 | 0.2.0 re-measure: same fixture reset to the plan-phase merge, same packages, models and tool permissions as the run above; `task begin` / `task finish`. See "0.2.0 re-measure" below. |
 | | | | | | B | | |
 
 Paste the final `darkforge ledger report` for each run:
@@ -62,3 +63,16 @@ total breakdown: input 244, output 43575, cache write 339000, cache read 4854609
 ```
 
 The ledger matched Claude Code's own usage for the next-task 001 session (opus cache reads 1,006,021 = orchestrator 982,028 + reviewer 23,993).
+
+### 0.2.0 re-measure (2026-11-26)
+
+`next-task` for tasks 001 and 002 again, each in a fresh session, on a copy of the run-A fixture reset to the commit that merged the phase plan. Plugin at 3c6b87e (`task begin` / `task finish`, ledger phase set by the hook). One run per task; model output varies between runs, so read these as one measurement, not a benchmark.
+
+| Task | Main-session model calls | Orchestrator tokens | Task total tokens | Session cost (list) |
+|---|---|---|---|---|
+| 001, run A (0.1.1) | 21 | 1,021,700 | 1,347,179 | 0.835 USD |
+| 001, 0.2.0 | 8 | 347,040 (−66%) | 637,400 (−53%) | 0.594 USD (−29%) |
+| 002, run A (0.1.1) | not counted | 603,822 | 979,063 | 0.608 USD |
+| 002, 0.2.0 | 8 | 346,080 (−43%) | 718,855 (−27%) | 0.486 USD (−20%) |
+
+Subagent tokens were about the same (implement 285 k → 250 k and 351 k → 348 k; review 40 k → 40 k and 25 k → 24 k). Costs fall less than tokens because most orchestrator tokens are cache reads, the cheapest kind.

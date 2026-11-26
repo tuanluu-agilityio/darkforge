@@ -1,5 +1,5 @@
 {
-  "description": "darkforge: model-guard for Agent calls; token ledger on SubagentStop and Stop; session brief on SessionStart",
+  "description": "darkforge: model-guard for Agent calls, AskUserQuestion watch; token ledger on SubagentStop and Stop; session brief on SessionStart",
   "hooks": {
     "PreToolUse": [
       {
@@ -10,6 +10,19 @@
             "command": "node",
             "args": [
               "${CLAUDE_PLUGIN_ROOT}/hooks/model-guard.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/ask-watch.mjs"
             ],
             "timeout": 10
           }
@@ -52,6 +65,21 @@
             "command": "node",
             "args": [
               "${CLAUDE_PLUGIN_ROOT}/hooks/session-brief.mjs"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/ask-watch.mjs"
             ],
             "timeout": 10
           }

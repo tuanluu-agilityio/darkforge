@@ -16,14 +16,14 @@ If the previous task's row says `auto-merge pending`: `gh pr list --state merged
 `df task begin NNN`. It reads the package header, refuses a blocked task or a model the policy denies, starts (or resumes) `task/NNN-<slug>`, and prints the implementer, the reviewer (agent + model) and the base ref. Do not read the package; the agents do. Resumed: continue from the first step not yet done (`git log` on the branch).
 
 ## 3. Implement and review
-Dispatch the implementer (`darkforge:<agent>`, its `model`) with: `Implement docs/tasks/NNN-<slug>.md on branch task/NNN-<slug>.` Keep its agent id and wait for its report. If it reports blocked, answer from the docs via `SendMessage`, or ask the owner.
+Dispatch the implementer (`darkforge:<agent>`, its `model`) with: `Implement docs/tasks/NNN-<slug>.md on branch task/NNN-<slug>.` Keep its agent id and wait for its report. If it reports blocked, answer from the docs via `SendMessage`, or ask the owner with `AskUserQuestion`.
 Then dispatch the reviewer the same way with: `Review branch task/NNN-<slug> against docs/tasks/NNN-<slug>.md. Base ref: <base>.` Keep its id. The model-guard hook sets the ledger phase for both dispatches.
 
 ## 4. Fix rounds
 First report line `CHANGES REQUIRED` with a `blocking` defect:
 1. Note `git rev-parse HEAD` as <previous HEAD>. `df ledger phase fix`; `SendMessage` to the SAME implementer with only the defect lines (file:line, trigger, severity). No review prose, no package text.
 2. `df ledger phase review`; `SendMessage` to the same reviewer: re-check only those defects and the commits after <previous HEAD>, run the gate once.
-3. Count the round; apply the escalation rules of `model-routing` (raise one tier after `escalation.raiseAfterFixRounds`, ask the owner after `escalation.askOwnerAfterFixRounds`).
+3. Count the round; apply the escalation rules of `model-routing` (raise one tier after `escalation.raiseAfterFixRounds`, ask the owner with `AskUserQuestion` after `escalation.askOwnerAfterFixRounds`).
 
 `should-fix` items alone do not block: note them for the backlog.
 
@@ -35,7 +35,7 @@ After `APPROVED`, edit in one message:
 Do not commit; step 6 does.
 
 ## 6. Finish
-`df task finish NNN --title "<package title>"`: fills the tokens, commits `memory-bank/` only, `memory lint`, gate, merge (PR after the checks, or local), ledger row. It stops at the first failure: a lint problem, fix the memory bank and re-run; gate lines plus `next: fix round`, run step 4 with them, then re-run; a merge refusal, fix what it names and re-run. In a merge queue: stop, tell the owner; a re-run once merged only cleans up.
+`df task finish NNN --title "<package title>"`: fills the tokens, commits `memory-bank/` only, `memory lint`, gate, merge (PR after the checks, or local), ledger row. It stops at the first failure: a lint problem, fix the memory bank and re-run; gate lines plus `next: fix round`, run step 4 with them, then re-run; a merge refusal, fix what it names and re-run. In a merge queue: stop and ask the owner with `AskUserQuestion`; a re-run once merged only cleans up.
 
 ## 7. Report
 From the `finish` output, tell the owner in `ownerLanguage`, at most 6 lines: task and result, models used, fix rounds, the token row, anything the owner must decide, next task. Last line: start a fresh session (`/clear`) before `/darkforge:next-task`, so the next task does not re-read this one.

@@ -118,6 +118,26 @@ function ledgerSummary(root) {
   };
 }
 
+const str = (v) => (typeof v === "string" && v !== "" ? v : null);
+const role = (v) => (v && typeof v === "object" && !Array.isArray(v) ? { agent: str(v.agent), model: str(v.model) } : null);
+
+/** The running step from state.json; the file is untrusted, so every field is reduced to a string, integer or null. */
+function runningStep(state) {
+  const w = state.waiting;
+  return {
+    task: str(state.task),
+    phase: str(state.phase),
+    since: str(state.since),
+    round: Number.isInteger(state.round) && state.round >= 0 ? state.round : 0,
+    implementer: role(state.implementer),
+    reviewer: role(state.reviewer),
+    waiting:
+      w && typeof w === "object" && !Array.isArray(w)
+        ? { since: str(w.since), questions: Array.isArray(w.questions) ? w.questions.filter((q) => typeof q === "string" && q !== "") : [] }
+        : null,
+  };
+}
+
 /** Everything the page shows, read from the project's files. Pure data: strings and numbers only. */
 export function collect(root, now = new Date()) {
   const loaded = loadConfig(root);
@@ -172,7 +192,7 @@ export function collect(root, now = new Date()) {
     ownerLanguage: config.project.ownerLanguage === "vi" ? "vi" : "en",
     generatedAt: now.toISOString(),
     plugin: version,
-    state: { task: state.task, phase: state.phase },
+    state: runningStep(state),
     where: text(section(active, "## Where we are")),
     next: text(section(active, "## Next")),
     questions,
@@ -185,7 +205,7 @@ export function collect(root, now = new Date()) {
 }
 
 /** The page: the template with the data embedded as JSON that cannot close the script element. */
-export function render(data) {
+export function render(data, { live = false } = {}) {
   const template = fs.readFileSync(path.join(PLUGIN_ROOT, "templates", "dashboard.html"), "utf8");
   // "<" is written as an escape, so no "</script>" in the data can end the element; U+2028/2029 likewise.
   const bs = String.fromCharCode(92); // a backslash, spelled out
@@ -194,7 +214,9 @@ export function render(data) {
     .replaceAll(String.fromCharCode(0x2028), bs + "u2028")
     .replaceAll(String.fromCharCode(0x2029), bs + "u2029");
   if (!template.includes("/*DARKFORGE_DATA*/null")) throw new Error("dashboard template has no data placeholder");
-  return template.replace("/*DARKFORGE_DATA*/null", () => json);
+  if (!template.includes("/*DARKFORGE_LIVE*/false")) throw new Error("dashboard template has no live placeholder");
+  // The flag first: the data is project text and could itself contain the flag's placeholder.
+  return template.replace("/*DARKFORGE_LIVE*/false", live ? "true" : "false").replace("/*DARKFORGE_DATA*/null", () => json);
 }
 
 /**

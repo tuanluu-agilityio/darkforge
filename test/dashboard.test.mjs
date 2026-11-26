@@ -98,7 +98,7 @@ test("render embeds the data so no file content can end the script element", (t)
   assert.ok(html.startsWith("<!DOCTYPE html>"));
   assert.ok(!html.includes(EVIL), "raw title must not appear");
   assert.equal((html.match(/<\/script>/g) ?? []).length, 1, "only the page's own closing tag");
-  const json = html.match(/const DATA=(.*);\nconst \$=/)[1];
+  const json = html.match(/DATA=(.*);\nconst \$=/)[1];
   assert.deepEqual(JSON.parse(json), data);
   assert.ok(!/https?:\/\/(?!www\.w3\.org)/.test(html), "no network URLs in the page");
 });
@@ -127,7 +127,7 @@ test("collect works on a fresh project with no plans and no ledger", (t) => {
   assert.equal(d.current, null);
   assert.equal(d.ledger.total, 0);
   assert.deepEqual(d.ledger.sessions, []);
-  assert.ok(render(d).includes("const DATA="));
+  assert.ok(render(d).includes("DATA="));
 });
 
 test("a ledger or progress row named __proto__ is just a key", (t) => {
@@ -139,7 +139,7 @@ test("a ledger or progress row named __proto__ is just a key", (t) => {
   assert.equal(Object.getOwnPropertyDescriptor(d.ledger.byTask, "__proto__").value.total, 7);
   assert.equal(Object.getOwnPropertyDescriptor(d.ledger.byModel, "__proto__").value, 7);
   assert.equal({}.total, undefined, "Object.prototype untouched");
-  assert.equal(JSON.parse(render(d).match(/const DATA=(.*);\nconst \$=/)[1]).ledger.total, d.ledger.total);
+  assert.equal(JSON.parse(render(d).match(/DATA=(.*);\nconst \$=/)[1]).ledger.total, d.ledger.total);
 });
 
 test("default output: a per-user private directory, the page readable by its owner only", { skip: process.platform === "win32" }, async (t) => {
@@ -164,4 +164,48 @@ test("default output directory that is a symlink is refused", { skip: process.pl
   let err = "";
   assert.equal(await main(["dashboard"], { cwd: root, stdout: () => {}, stderr: (s) => (err += s) }), 1);
   assert.match(err, /not a plain directory/);
+});
+
+test("collect passes the running step through, sanitized", (t) => {
+  const root = project(t);
+  const since = "2026-11-27T01:00:00.000Z";
+  writeState(root, { task: "002", phase: "fix", round: 2, implementer: { agent: "builder", model: "opus" }, waiting: { since, questions: [EVIL] } });
+  const s = collect(root).state;
+  assert.equal(s.task, "002");
+  assert.equal(s.phase, "fix");
+  assert.equal(typeof s.since, "string");
+  assert.equal(s.round, 2);
+  assert.deepEqual(s.implementer, { agent: "builder", model: "opus" });
+  assert.equal(s.reviewer, null);
+  assert.deepEqual(s.waiting, { since, questions: [EVIL] });
+  writeState(root, { round: "2", implementer: "x", reviewer: { agent: 5, model: "m" }, waiting: { since: 1, questions: "no" } });
+  const b = collect(root).state;
+  assert.equal(b.round, 0);
+  assert.equal(b.implementer, null);
+  assert.deepEqual(b.reviewer, { agent: null, model: "m" });
+  assert.deepEqual(b.waiting, { since: null, questions: [] });
+  writeState(root, { waiting: "x" });
+  assert.equal(collect(root).state.waiting, null);
+});
+
+test("render live flag", (t) => {
+  const d = collect(project(t));
+  assert.ok(!render(d).includes("/*DARKFORGE_LIVE*/false"));
+  assert.ok(render(d).includes("const LIVE=false"));
+  assert.ok(render(d, { live: true }).includes("const LIVE=true"));
+  assert.ok(!render(d).includes(EVIL));
+});
+
+test("the page opens an EventSource only behind the live flag", () => {
+  const tpl = fs.readFileSync(new URL("../templates/dashboard.html", import.meta.url), "utf8");
+  assert.match(tpl, /if\s*\(LIVE\)[\s\S]*new EventSource\("events"\)/);
+  assert.equal((tpl.match(/new EventSource/g) ?? []).length, 1);
+});
+
+test("waiting questions render as text", (t) => {
+  const root = project(t);
+  writeState(root, { waiting: { since: "2026-11-27T01:00:00.000Z", questions: [EVIL] } });
+  const html = render(collect(root), { live: true });
+  assert.ok(!html.includes("</script><img"));
+  assert.equal((html.match(/<\/script>/g) ?? []).length, 1);
 });

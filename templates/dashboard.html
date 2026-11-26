@@ -25,6 +25,7 @@ p{margin:0}
 .brand{display:flex;align-items:center;gap:10px;font-weight:600}
 .proj{font:13px var(--mono);color:var(--mut);border:1px solid var(--line2);border-radius:7px;padding:3px 9px}
 .gen{margin-left:auto;font-size:13px;color:var(--dim)}
+.livei{font:12px var(--mono);color:var(--ok);display:inline-flex;align-items:center;gap:6px}.livei i{width:7px;height:7px;border-radius:50%;background:var(--ok)}.livei.down{color:var(--warn)}.livei.down i{background:var(--warn)}
 .lang{display:flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
 .lang button{min-height:34px;min-width:38px;border:0;background:transparent;color:var(--mut);font:500 12px var(--mono);cursor:pointer}
 .lang button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
@@ -103,6 +104,8 @@ tbody tr:hover,tbody tr[aria-selected=true]{background:var(--s2)}
 .qs{display:grid;gap:10px}
 .q{border:1px solid color-mix(in srgb,var(--warn) 35%,var(--line));border-radius:10px;padding:10px 12px;background:var(--bg)}
 .q b{font:500 13px var(--mono);color:var(--warn)}
+.q.now{border-color:var(--warn)}
+h2.warn{color:var(--warn)}
 .q p{font-size:14px;margin-top:3px}
 .q small{display:block;font-size:12px;color:var(--dim);margin-top:4px}
 .list{margin:0;padding:0;list-style:none;display:grid;gap:8px;font-size:14px;color:var(--mut)}
@@ -123,10 +126,12 @@ footer{border-top:1px solid var(--line);padding:20px 0 32px;color:var(--dim);fon
     <span class="brand"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="#18181B" stroke="#3F3F46"/><path d="M8 21h16v3H8z" fill="#FAFAFA"/><path d="M11 17l5-9 5 9z" fill="#F97316"/><path d="M14 17h4v4h-4z" fill="#FAFAFA"/></svg>darkforge</span>
     <span class="proj" id="projName"></span>
     <span class="gen" id="gen"></span>
+    <span class="livei" id="live" role="status" hidden></span>
     <div class="lang" role="group" aria-label="Language"><button data-lang="en">EN</button><button data-lang="vi">VI</button></div>
   </div>
 </header>
 <main class="wrap">
+  <div class="warnbox" id="failBanner" role="alert" hidden></div>
   <section class="head"><div><h1 id="headline"></h1><p id="subline"></p></div><div class="now" id="now"></div></section>
   <section class="figs" id="figs" aria-label="Key figures"></section>
   <div class="grid">
@@ -141,18 +146,19 @@ footer{border-top:1px solid var(--line);padding:20px 0 32px;color:var(--dim);fon
     </div>
     <div class="col">
       <section class="panel"><div class="ph"><h2 data-t="next"></h2><span class="src">activeContext.md</span></div><div class="pb" style="display:grid;gap:10px"><pre class="txt" id="nextTxt"></pre><div class="cmd"><code id="c1">/clear</code><button class="copy" data-copy="c1">Copy</button></div><div class="cmd"><code id="c2"></code><button class="copy" data-copy="c2">Copy</button></div></div></section>
-      <section class="panel"><div class="ph"><h2 data-t="questions"></h2><span class="src">activeContext.md</span></div><div class="pb qs" id="questions"></div></section>
-      <section class="panel"><div class="ph"><h2 data-t="ledgerH"></h2><span class="src">.darkforge/ledger.jsonl</span></div><div class="pb"><div class="legend" id="legend"></div><div class="bars" id="bars"></div><div class="split2"><div><h3 style="font-size:13px;color:var(--dim);font-weight:500;margin-bottom:8px" data-t="byModel"></h3><div class="kv" id="byModel"></div></div><div><h3 style="font-size:13px;color:var(--dim);font-weight:500;margin-bottom:8px" data-t="byKind"></h3><div class="kv" id="byKind"></div></div></div><p class="note" style="margin-top:14px" data-t="ledgerNote"></p></div></section>
+      <section class="panel"><div class="ph"><h2 id="qH" data-t="questions"></h2><span class="src">activeContext.md</span></div><div class="pb qs" id="questions"></div></section>
+      <section class="panel"><div class="ph"><h2 data-t="ledgerH"></h2><span class="src">.darkforge/ledger.jsonl</span></div><div class="pb"><div class="legend" id="legend"></div><div class="bars" id="bars"></div><div class="split2"><div><h3 style="font-size:13px;color:var(--dim);font-weight:500;margin-bottom:8px" data-t="byModel"></h3><div class="kv" id="byModel"></div></div><div><h3 style="font-size:13px;color:var(--dim);font-weight:500;margin-bottom:8px" data-t="byKind"></h3><div class="kv" id="byKind"></div></div></div><p class="note" style="margin-top:14px" id="ledgerNote"></p></div></section>
       <section class="panel"><div class="ph"><h2 data-t="sessH"></h2></div><div class="pb"><p class="note" data-t="sessP"></p><div class="sess" id="sess"></div><div id="sessMsg"></div></div></section>
       <section class="panel"><div class="ph"><h2 data-t="decisions"></h2><span class="src">decisions.md</span></div><div class="pb"><ul class="list" id="decisions"></ul></div></section>
       <section class="panel"><div class="ph"><h2 data-t="backlog"></h2><span class="src">backlog.md</span></div><div class="pb"><ul class="list" id="backlog"></ul></div></section>
     </div>
   </div>
 </main>
-<footer><div class="wrap" data-t="foot"></div></footer>
+<footer><div class="wrap" id="foot"></div></footer>
 <script>
 {
-const DATA=/*DARKFORGE_DATA*/null;
+const LIVE=/*DARKFORGE_LIVE*/false;
+let DATA=/*DARKFORGE_DATA*/null;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const k=n=>n>=1e6?(n/1e6).toFixed(2)+"M":n>=1e3?(n/1e3).toFixed(1)+"k":String(n);
@@ -165,13 +171,17 @@ const T={
  foot:["Read-only page generated by <code>darkforge dashboard</code> from the repository's files. Each panel names its source. Run the command again to refresh.","Trang chỉ đọc do <code>darkforge dashboard</code> tạo từ các file trong repository. Mỗi khung ghi rõ nguồn. Chạy lại lệnh để cập nhật."],
  all:["All","Tất cả"],done:["Done","Xong"],run:["In progress","Đang chạy"],todo:["To do","Chưa làm"],blocked:["Blocked","Bị chặn"],pending:["Merge pending","Chờ merge"],
  gen:["Generated","Tạo lúc"],
+ footLive:["Live page served by <code>darkforge dashboard --watch</code> on this computer only. Stop it with Ctrl+C.","Trang trực tiếp do <code>darkforge dashboard --watch</code> phục vụ, chỉ trên máy này. Dừng bằng Ctrl+C."],
+ ledgerLive:["Tokens are added when each agent finishes, not while it runs.","Token được cộng khi mỗi agent xong, không phải trong lúc nó đang chạy."],
+ liveOn:["Live · updated","Trực tiếp · cập nhật"],liveOff:["Disconnected, retrying","Mất kết nối, đang thử lại"],
+ askedNow:["asked in Claude Code now","đang hỏi trong Claude Code"],mainSession:["main session","phiên chính"],
 };
 let lang=DATA.ownerLanguage||"en";
 const L=key=>T[key]?T[key][lang==="vi"?1:0]:key;
 const V=(en,vi)=>lang==="vi"?vi:en;
 const PH=["implement","review","fix","orchestrator"];
 const COL={implement:"var(--blue)",review:"var(--vio)",fix:"var(--warn)",orchestrator:"var(--acc)"};
-const led=DATA.ledger;
+let led=DATA.ledger;
 let phaseN=DATA.current,filter="all",sel=null;
 const phase=()=>DATA.phases.find(p=>p.n===phaseN)||null;
 const tok=id=>led.byTask[id]||null;
@@ -182,6 +192,9 @@ sel=firstPick();
 function render(){
   document.documentElement.lang=lang;
   document.querySelectorAll("[data-t]").forEach(el=>el.innerHTML=L(el.dataset.t));
+  $("#foot").innerHTML=L(LIVE?"footLive":"foot");
+  $("#ledgerNote").textContent=L("ledgerNote")+(LIVE?" "+L("ledgerLive"):"");
+  paintLive();
   document.querySelectorAll("[data-lang]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.lang===lang));
   $("#projName").textContent=DATA.project;
   $("#gen").textContent=`${L("gen")} ${DATA.generatedAt.slice(0,16).replace("T"," ")} UTC${DATA.plugin?" · darkforge "+DATA.plugin:""}`;
@@ -191,7 +204,8 @@ function render(){
   const cur=DATA.state.task;
   $("#headline").textContent=!p?V("No phase planned yet.","Chưa có phase nào được lập kế hoạch."):V(`Phase ${p.n}: ${done} of ${n} tasks done${cur?`; task ${cur} in progress`:""}.`,`Phase ${p.n}: xong ${done}/${n} task${cur?`; task ${cur} đang chạy`:""}.`);
   $("#subline").textContent=DATA.where||"";
-  $("#now").innerHTML=cur?`<span class="chip run"><i></i>task ${esc(cur)}</span><span class="chip"><i></i>phase: ${esc(DATA.state.phase||"-")}</span>`:`<span class="chip"><i></i>${V("no active task","không có task đang chạy")}</span>`;
+  renderNow();
+  const wq=DATA.state.waiting?DATA.state.waiting.questions:[];
   const seg=(c,v)=>n?`<i style="width:${(v/n*100).toFixed(1)}%;background:${c}"></i>`:"";
   const orchShare=led.total?Math.round(led.kinds.orchestrator/led.total*100):0;
   const cacheShare=led.total?Math.round(led.cacheRead/led.total*100):0;
@@ -200,7 +214,7 @@ function render(){
    [V("Phase progress","Tiến độ phase"),n?`${done}/${n}`:"—",n?V(`${cnt("run")} running · ${cnt("blocked")} blocked`,`${cnt("run")} đang chạy · ${cnt("blocked")} bị chặn`):V("no tasks","chưa có task"),n?`<div class="meter">${seg("var(--ok)",done)}${seg("var(--acc)",cnt("run"))}${seg("var(--warn)",cnt("pending"))}${seg("var(--err)",cnt("blocked"))}</div>`:""],
    [V("Tokens recorded","Token đã ghi"),led.total?k(led.total):"—",led.total?V(`${cacheShare}% cache reads`,`${cacheShare}% là cache read`):V("no ledger records yet","chưa có bản ghi ledger"),""],
    [V("Main-session share","Phần của phiên chính"),led.total?orchShare+"%":"—",V("orchestrator vs all tokens","orchestrator trên tổng token"),""],
-   [V("Waiting on you","Đang chờ bạn"),DATA.questions.length,V("open questions","câu hỏi mở"),""],
+   [V("Waiting on you","Đang chờ bạn"),DATA.questions.length+wq.length,V("open questions","câu hỏi mở"),""],
    [V("Shared sessions","Session dùng chung"),multi.length,V("sessions that ran 2+ tasks","session chạy từ 2 task"),""]
   ].map(([a,b,c,d])=>`<div class="fig"><span>${a}</span><b>${esc(b)}</b><small>${c}</small>${d}</div>`).join("");
   $("#phases").innerHTML=DATA.phases.length?DATA.phases.map(q=>{const d=q.tasks.filter(t=>t.status==="done").length;const st=q.status==="done"?V("done · reviewed","xong · đã review"):q.status==="active"?V(`${d}/${q.tasks.length} merged`,`${d}/${q.tasks.length} đã merge`):V("planned","đã lập kế hoạch");return `<button class="pc" data-p="${q.n}" aria-pressed="${q.n===phaseN}"><b>${V("Phase","Phase")} ${q.n}: ${esc(q.title)}</b><span>${st}</span></button>`}).join(""):`<p class="empty">${V("No docs/plans/phase-*.md yet. Run /darkforge:plan-phase.","Chưa có docs/plans/phase-*.md. Chạy /darkforge:plan-phase.")}</p>`;
@@ -222,7 +236,8 @@ function render(){
   $("#nextTxt").textContent=DATA.next||V("(empty)","(trống)");
   const nx=(DATA.next||"").toLowerCase();
   $("#c2").textContent=nx.includes("phase-review")||nx.includes("phase review")?"/darkforge:phase-review":/\bplan/.test(nx)&&!/\btask\s+\w+/.test(nx)?"/darkforge:plan-phase":"/darkforge:next-task";
-  $("#questions").innerHTML=DATA.questions.length?DATA.questions.map(q=>`<div class="q"><b>${esc(q.id)}</b><p>${esc(q.question)}</p>${q.blocks?`<small>${V("Blocks","Chặn")}: ${esc(q.blocks)}</small>`:""}</div>`).join(""):`<p class="empty">${V("No open questions.","Không có câu hỏi mở.")}</p>`;
+  $("#qH").classList.toggle("warn",!!DATA.state.waiting);
+  $("#questions").innerHTML=DATA.questions.length||wq.length?wq.map(q=>`<div class="q now"><b>${L("askedNow")}</b><p>${esc(q)}</p></div>`).join("")+DATA.questions.map(q=>`<div class="q"><b>${esc(q.id)}</b><p>${esc(q.question)}</p>${q.blocks?`<small>${V("Blocks","Chặn")}: ${esc(q.blocks)}</small>`:""}</div>`).join(""):`<p class="empty">${V("No open questions.","Không có câu hỏi mở.")}</p>`;
   $("#legend").innerHTML=PH.map(x=>`<span><i style="background:${COL[x]}"></i>${x}</span>`).join("");
   const entries=Object.entries(led.byTask);
   const mx=Math.max(1,...entries.map(([,v])=>v.total));
@@ -234,6 +249,23 @@ function render(){
   $("#sessMsg").innerHTML=!led.sessions.length?`<p class="empty">${V("No session ids in the ledger yet (recorded from darkforge 0.3.0).","Ledger chưa có session id (được ghi từ darkforge 0.3.0).")}</p>`:multi.length?`<div class="warnbox">${V(`${multi.length} session(s) ran more than one task. Start a fresh session (/clear) before each task.`,`${multi.length} session chạy nhiều hơn một task. Hãy mở session mới (/clear) trước mỗi task.`)}</div>`:`<div class="okbox">${V("Every session ran one task.","Mỗi session chỉ chạy một task.")}</div>`;
   $("#decisions").innerHTML=DATA.decisions.length?DATA.decisions.map(d=>`<li><code>${esc(d.id)}</code><span>${esc(d.text)}${d.date?` <span class="note">· ${esc(d.date)}</span>`:""}</span></li>`).join(""):`<li class="empty">${V("No decisions recorded.","Chưa có quyết định nào.")}</li>`;
   $("#backlog").innerHTML=DATA.backlog.length?DATA.backlog.map(b=>`<li><span style="color:var(--dim)">·</span><span>${esc(b)}</span></li>`).join(""):`<li class="empty">${V("Backlog is empty.","Backlog trống.")}</li>`;
+}
+/* the "now" chips: task, phase, who is working, since when, fix round */
+function renderNow(){
+  const st=DATA.state,cur=st.task,chip=(t,c)=>`<span class="chip${c?" "+c:""}"><i></i>${esc(t)}</span>`;
+  if(!cur){$("#now").innerHTML=chip(V("no active task","không có task đang chạy"));return;}
+  const r=st.phase==="review"?st.reviewer:st.phase==="implement"||st.phase==="fix"?st.implementer:null;
+  const who=st.phase==="orchestrator"?L("mainSession"):r?[r.agent,r.model].filter(Boolean).join(" "):"";
+  const t=st.since?new Date(st.since):null,ok=t&&!isNaN(t);
+  const since=ok?V("since ","từ ")+t.toTimeString().slice(0,5)+" ("+Math.max(0,Math.floor((Date.now()-t)/6e4))+" min)":"";
+  $("#now").innerHTML=chip("task "+cur,"run")+chip("phase: "+(st.phase||"-"))+(who?chip(who):"")+(since?chip(since):"")+(st.round>0?chip(V("fix round ","vòng sửa ")+st.round):"");
+}
+/* live mode: connection indicator and the last-good-data banner */
+let conn=null,lastAt=null;
+function paintLive(){
+  const el=$("#live");el.hidden=!LIVE||!conn;if(el.hidden)return;
+  el.className="livei"+(conn==="ok"?"":" down");
+  el.innerHTML="<i></i>"+(conn==="ok"?L("liveOn")+" "+esc(lastAt):L("liveOff"));
 }
 function renderDetail(){
   const p=phase();const t=p&&p.tasks.find(x=>x.id===sel);
@@ -256,6 +288,21 @@ $("#tasks").addEventListener("click",e=>{const tr=e.target.closest("tr");if(tr)p
 $("#tasks").addEventListener("keydown",e=>{const tr=e.target.closest("tr");if(!tr)return;if(e.key==="Enter"||e.key===" "){e.preventDefault();pick(tr);}const d={ArrowDown:"nextElementSibling",ArrowUp:"previousElementSibling"}[e.key];if(d&&tr[d]){e.preventDefault();tr[d].focus();}});
 document.addEventListener("click",async e=>{const b=e.target.closest("[data-copy]");if(!b)return;const el=document.getElementById(b.dataset.copy);try{await navigator.clipboard.writeText(el.textContent);b.textContent="Copied";b.classList.add("done");}catch{const r=document.createRange();r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent="Selected";}setTimeout(()=>{b.textContent="Copy";b.classList.remove("done");},1600);});
 render();
+if(LIVE){
+  const es=new EventSource("events");
+  const stamp=()=>{lastAt=new Date().toTimeString().slice(0,8);};
+  es.addEventListener("open",()=>{conn="ok";stamp();paintLive();});
+  es.addEventListener("error",()=>{conn="down";paintLive();});
+  es.addEventListener("message",e=>{
+    let d;try{d=JSON.parse(e.data);}catch{return;}
+    const y=scrollY;DATA=d;led=d.ledger;
+    if(!phase())phaseN=DATA.current;
+    if(!(phase()?.tasks||[]).some(x=>x.id===sel))sel=firstPick();
+    conn="ok";stamp();$("#failBanner").hidden=true;render();scrollTo(0,y);
+  });
+  es.addEventListener("failed",e=>{$("#failBanner").textContent=e.data;$("#failBanner").hidden=false;});
+  setInterval(renderNow,3e4);
+}
 }
 </script>
 </body>

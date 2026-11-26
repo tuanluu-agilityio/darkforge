@@ -6,10 +6,10 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const readJson = (rel) => JSON.parse(readFileSync(root + rel, 'utf8'));
 
-test('plugin manifest identifies darkforge 0.1.1 under MIT', () => {
+test('plugin manifest identifies darkforge 0.2.0 under MIT', () => {
   const m = readJson('.claude-plugin/plugin.json');
   assert.equal(m.name, 'darkforge');
-  assert.equal(m.version, '0.1.1');
+  assert.equal(m.version, '0.2.0');
   assert.equal(m.license, 'MIT');
 });
 

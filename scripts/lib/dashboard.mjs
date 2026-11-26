@@ -82,32 +82,35 @@ function phasePlans(root) {
 
 function ledgerSummary(root) {
   const recs = readRecords(root);
-  const byTask = {};
-  const byModel = {};
+  // Maps: a task or model named "__proto__" is just a key, never the prototype.
+  const byTask = new Map();
+  const byModel = new Map();
   const kinds = { orchestrator: 0, subagent: 0 };
   let total = 0;
   let cacheRead = 0;
   const sessions = new Map(); // session -> task ids, in order of first orchestrator record
   for (const r of recs) {
     const t = typeof r.task === "string" && r.task !== "" ? r.task : "(no task)";
-    byTask[t] ??= { implement: 0, review: 0, fix: 0, orchestrator: 0, total: 0, session: null };
-    if (PHASES.includes(r.phase)) byTask[t][r.phase] += r.tokens;
-    byTask[t].total += r.tokens;
+    if (!byTask.has(t)) byTask.set(t, { implement: 0, review: 0, fix: 0, orchestrator: 0, total: 0, session: null });
+    const row = byTask.get(t);
+    if (PHASES.includes(r.phase)) row[r.phase] += r.tokens;
+    row.total += r.tokens;
     const m = typeof r.model === "string" && r.model !== "" ? r.model : "(unknown)";
-    byModel[m] = (byModel[m] ?? 0) + r.tokens;
+    byModel.set(m, (byModel.get(m) ?? 0) + r.tokens);
     kinds[r.kind === "orchestrator" ? "orchestrator" : "subagent"] += r.tokens;
     total += r.tokens;
     if (Number.isFinite(r.usage?.cacheRead)) cacheRead += r.usage.cacheRead;
     if (r.kind === "orchestrator" && typeof r.session === "string" && t !== "(no task)") {
-      byTask[t].session = r.session;
+      row.session = r.session;
       if (!sessions.has(r.session)) sessions.set(r.session, []);
       if (!sessions.get(r.session).includes(t)) sessions.get(r.session).push(t);
     }
   }
   return {
     records: recs.length,
-    byTask,
-    byModel,
+    // fromEntries defines own properties, so a "__proto__" key stays a plain key.
+    byTask: Object.fromEntries(byTask),
+    byModel: Object.fromEntries(byModel),
     kinds,
     total,
     cacheRead,
@@ -124,20 +127,20 @@ export function collect(root, now = new Date()) {
   const active = mb("activeContext.md");
   const state = readState(root);
 
-  const progress = {};
+  const progress = new Map();
   for (const r of tableRows((mb("progress.md") ?? "").split(/\r?\n/))) {
-    if (r.task) progress[r.task] = { status: (r.status ?? "").toLowerCase(), tokens: r.tokens ?? "", model: r.model ?? "" };
+    if (r.task) progress.set(r.task, { status: (r.status ?? "").toLowerCase(), tokens: r.tokens ?? "", model: r.model ?? "" });
   }
   const plans = phasePlans(root);
   for (const p of plans) {
     for (const t of p.tasks) {
-      const row = progress[t.id];
+      const row = progress.get(t.id);
       const blocked = blockingQuestions(root, t.id);
       t.status =
         state.task === t.id ? "run" : row?.status === "done" ? "done" : row?.status?.includes("pending") ? "pending" : blocked.length ? "blocked" : "todo";
       t.blockedBy = blocked;
     }
-    const reviewDone = Object.entries(progress).some(([id, r]) => new RegExp(`^P${p.n}R\\d*$`).test(id) && r.status === "done");
+    const reviewDone = [...progress].some(([id, r]) => new RegExp(`^P${p.n}R\\d*$`).test(id) && r.status === "done");
     const done = p.tasks.filter((t) => t.status === "done").length;
     p.status = p.tasks.length && done === p.tasks.length && reviewDone ? "done" : done || p.tasks.some((t) => t.status === "run") ? "active" : "planned";
     p.reviewed = reviewDone;
@@ -194,20 +197,43 @@ export function render(data) {
   return template.replace("/*DARKFORGE_DATA*/null", () => json);
 }
 
-/** Default output: the OS temp dir, one file per project, so the repository's working tree never changes. */
+/**
+ * Default output: a per-user directory in the OS temp dir (0700), one file per project, so the working
+ * tree never changes and, on a shared /tmp, no other user can read the page or plant a file in its place.
+ */
 export function defaultOut(root) {
   const id = crypto.createHash("sha256").update(path.resolve(root)).digest("hex").slice(0, 8);
-  return path.join(os.tmpdir(), `darkforge-dashboard-${id}.html`);
+  let user = "";
+  try {
+    user = typeof process.getuid === "function" ? String(process.getuid()) : os.userInfo().username;
+  } catch {
+    user = "user";
+  }
+  const safe = user.replace(/[^A-Za-z0-9_.-]/g, "_") || "user";
+  return path.join(os.tmpdir(), `darkforge-${safe}`, `dashboard-${id}.html`);
 }
 
-function openFile(file) {
+/** Create the private output directory, or refuse one that is a symlink or belongs to someone else. */
+function privateDir(dir) {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const st = fs.lstatSync(dir);
+  if (!st.isDirectory() || st.isSymbolicLink()) throw new Error(`${dir} is not a plain directory; refusing to write the dashboard there`);
+  if (typeof process.getuid === "function" && st.uid !== process.getuid()) {
+    throw new Error(`${dir} belongs to another user; refusing to write the dashboard there (use --out)`);
+  }
+}
+
+/** Open the page in the default browser. No shell: the path is one argument (no &, | or %VAR% on Windows). */
+function openFile(file, ctx) {
   const [cmd, args] =
-    process.platform === "win32" ? ["cmd", ["/c", "start", "", file]] : process.platform === "darwin" ? ["open", [file]] : ["xdg-open", [file]];
+    process.platform === "win32" ? ["explorer.exe", [file]] : process.platform === "darwin" ? ["open", [file]] : ["xdg-open", [file]];
+  const say = () => ctx.stdout("could not open a browser; open the file above\n");
   try {
-    spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: true }).unref();
-    return true;
+    const child = spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: true });
+    child.on("error", say); // a missing opener (no xdg-open) is reported here, not thrown
+    child.unref();
   } catch {
-    return false;
+    say();
   }
 }
 
@@ -237,9 +263,15 @@ export async function dashboardCommand(args, ctx) {
     return 1;
   }
   const file = path.resolve(ctx.cwd, out ?? defaultOut(root));
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, html);
+  try {
+    if (out) fs.mkdirSync(path.dirname(file), { recursive: true });
+    else privateDir(path.dirname(file));
+    fs.writeFileSync(file, html, { mode: 0o600 });
+  } catch (e) {
+    ctx.stderr(`darkforge: ${e.message}\n`);
+    return 1;
+  }
   ctx.stdout(`dashboard: ${file}\n`);
-  if (open && !openFile(file)) ctx.stdout("could not open a browser; open the file above\n");
+  if (open) openFile(file, ctx);
   return 0;
 }

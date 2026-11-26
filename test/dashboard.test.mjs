@@ -129,3 +129,39 @@ test("collect works on a fresh project with no plans and no ledger", (t) => {
   assert.deepEqual(d.ledger.sessions, []);
   assert.ok(render(d).includes("const DATA="));
 });
+
+test("a ledger or progress row named __proto__ is just a key", (t) => {
+  const root = project(t);
+  fs.appendFileSync(path.join(root, ".darkforge", "ledger.jsonl"), JSON.stringify({ at: "x", task: "__proto__", phase: "implement", kind: "subagent", model: "__proto__", tokens: 7 }) + "\n");
+  fs.appendFileSync(path.join(root, "memory-bank", "progress.md"), "| __proto__ | x | x | x | done | - |\n");
+  const d = collect(root);
+  assert.equal(Object.getPrototypeOf(d.ledger.byTask), Object.prototype);
+  assert.equal(Object.getOwnPropertyDescriptor(d.ledger.byTask, "__proto__").value.total, 7);
+  assert.equal(Object.getOwnPropertyDescriptor(d.ledger.byModel, "__proto__").value, 7);
+  assert.equal({}.total, undefined, "Object.prototype untouched");
+  assert.equal(JSON.parse(render(d).match(/const DATA=(.*);\nconst \$=/)[1]).ledger.total, d.ledger.total);
+});
+
+test("default output: a per-user private directory, the page readable by its owner only", { skip: process.platform === "win32" }, async (t) => {
+  const root = project(t);
+  const out = defaultOut(root);
+  t.after(() => fs.rmSync(out, { force: true }));
+  const ctx = { cwd: root, stdout: () => {}, stderr: (s) => assert.fail(s) };
+  assert.equal(await main(["dashboard"], ctx), 0);
+  assert.equal(fs.statSync(path.dirname(out)).mode & 0o077, 0, "directory 0700");
+  assert.equal(fs.statSync(out).mode & 0o077, 0, "file 0600");
+});
+
+test("default output directory that is a symlink is refused", { skip: process.platform === "win32" }, async (t) => {
+  const root = project(t);
+  const dir = path.dirname(defaultOut(root));
+  const real = fs.mkdtempSync(path.join(os.tmpdir(), "df real "));
+  t.after(() => fs.rmSync(real, { recursive: true, force: true }));
+  const had = fs.existsSync(dir);
+  if (had) return; // a real per-user dir already exists on this machine; nothing to plant
+  fs.symlinkSync(real, dir);
+  t.after(() => fs.rmSync(dir, { force: true }));
+  let err = "";
+  assert.equal(await main(["dashboard"], { cwd: root, stdout: () => {}, stderr: (s) => (err += s) }), 1);
+  assert.match(err, /not a plain directory/);
+});

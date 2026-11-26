@@ -6,7 +6,7 @@ user-invocable: true
 
 # Status
 
-Read-only: change no file, branch or state, dispatch no agent.
+Read-only: change no file in the repository, no branch or state, dispatch no agent. The only write is the optional dashboard page in the OS temp dir (step 4).
 
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/darkforge.mjs" ledger report`.
 2. Read only `memory-bank/activeContext.md` and `memory-bank/progress.md`.

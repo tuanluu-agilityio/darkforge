@@ -29,6 +29,10 @@ const ENUMS = {
   superpowers: ["auto", "off"],
 };
 const NULLABLE = new Set(["git.remote"]);
+const STRING_ARRAYS = ["models.tiers", "models.banned", "riskAreas", "git.requiredChecks"];
+const STRING_MAPS = ["models.floors"];
+// JSON.parse makes "__proto__" an own key; copying it with plain assignment would set the prototype.
+const SKIP_KEYS = new Set(["__proto__"]);
 
 const kind = (v) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
 const isObj = (v) => kind(v) === "object";
@@ -54,7 +58,7 @@ function merge(defaults, file, prefix, errors) {
       out[key] = clone(d);
     } else if (isObj(d)) {
       out[key] = merge(d, f, p, errors);
-      for (const extra of Object.keys(f)) if (!Object.hasOwn(d, extra)) out[key][extra] = clone(f[extra]);
+      for (const extra of Object.keys(f)) if (!Object.hasOwn(d, extra) && !SKIP_KEYS.has(extra)) out[key][extra] = clone(f[extra]);
     } else {
       out[key] = clone(f);
     }
@@ -90,6 +94,20 @@ export function loadConfig(root) {
   return validateConfig(parsed);
 }
 
+const at = (obj, dotted) => dotted.split(".").reduce((o, k) => (isObj(o) && Object.hasOwn(o, k) ? o[k] : undefined), obj);
+
+/** Elements of string lists and values of string maps must be strings (the merge checks only the container type). */
+function checkElements(config, errors) {
+  for (const p of STRING_ARRAYS) {
+    const v = at(config, p);
+    if (Array.isArray(v)) v.forEach((x, i) => typeof x !== "string" && errors.push(`${p}[${i}] must be a string (got ${kind(x)})`));
+  }
+  for (const p of STRING_MAPS) {
+    const v = at(config, p);
+    if (isObj(v)) for (const [k, x] of Object.entries(v)) if (typeof x !== "string") errors.push(`${p}.${k} must be a string (got ${kind(x)})`);
+  }
+}
+
 /** Validate a parsed config object. Returns { ok, config } or { ok: false, error }. */
 export function validateConfig(parsed) {
   if (!isObj(parsed)) return { ok: false, error: "config must be a JSON object" };
@@ -98,7 +116,8 @@ export function validateConfig(parsed) {
   }
   const errors = [];
   const config = merge(DEFAULT_CONFIG, parsed, "", errors);
-  for (const extra of Object.keys(parsed)) if (!Object.hasOwn(DEFAULT_CONFIG, extra)) config[extra] = clone(parsed[extra]);
+  for (const extra of Object.keys(parsed)) if (!Object.hasOwn(DEFAULT_CONFIG, extra) && !SKIP_KEYS.has(extra)) config[extra] = clone(parsed[extra]);
+  checkElements(config, errors);
   if (errors.length) return { ok: false, error: `invalid config: ${errors.join("; ")}` };
   return { ok: true, config };
 }

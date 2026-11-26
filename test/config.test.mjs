@@ -82,3 +82,28 @@ test("findProjectRoot from nested dir with spaces", () => {
   const none = fs.mkdtempSync(path.join(os.tmpdir(), "darkforge test "));
   assert.equal(findProjectRoot(none), null);
 });
+
+test("array and map elements must be strings", () => {
+  for (const [cfg, field] of [
+    [{ models: { tiers: ["haiku", 3] } }, /models\.tiers\[1\]/],
+    [{ models: { banned: [null] } }, /models\.banned\[0\]/],
+    [{ riskAreas: [{}] }, /riskAreas\[0\]/],
+    [{ git: { requiredChecks: ["ci", false] } }, /git\.requiredChecks\[1\]/],
+    [{ models: { floors: { builder: 5 } } }, /models\.floors\.builder/],
+  ]) {
+    const r = loadConfig(tmpProject({ schemaVersion: 1, ...cfg }));
+    assert.equal(r.ok, false, JSON.stringify(cfg));
+    assert.match(r.error, field);
+  }
+});
+
+test("a __proto__ key in the file never changes an object's prototype", () => {
+  const text = '{"schemaVersion":1,"models":{"floors":{"__proto__":{"builder":"opus"}}},"__proto__":{"polluted":1}}';
+  const r = loadConfig(tmpProject(text));
+  assert.equal(r.ok, true, r.error);
+  assert.equal(Object.getPrototypeOf(r.config.models.floors), Object.prototype);
+  assert.equal(r.config.models.floors.builder, undefined);
+  assert.equal(Object.getPrototypeOf(r.config), Object.prototype);
+  assert.equal(r.config.polluted, undefined);
+  assert.equal({}.builder, undefined);
+});

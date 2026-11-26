@@ -53,3 +53,15 @@ test("setRunner injects a fake and resetRunner restores", () => {
   resetRunner();
   assert.equal(run("darkforge-no-such-binary-xyz", []).code, 127);
 });
+
+test("CLI sets process.exitCode instead of calling process.exit, so piped output is not cut", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(fileURLToPath(new URL("../scripts/darkforge.mjs", import.meta.url)), "utf8");
+  assert.doesNotMatch(src, /process\.exit\(/);
+  const cli = fileURLToPath(new URL("../scripts/darkforge.mjs", import.meta.url));
+  const r = spawnSync(process.execPath, [cli, "bogus"], { encoding: "utf8" });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /usage/);
+});

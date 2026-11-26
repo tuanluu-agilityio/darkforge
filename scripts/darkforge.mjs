@@ -43,5 +43,8 @@ export async function main(argv, ctx = defaultCtx()) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main(process.argv.slice(2)).then((code) => process.exit(code));
+  // Set exitCode rather than exiting at once: an immediate exit can cut stdout still being written to a pipe.
+  main(process.argv.slice(2)).then((code) => {
+    process.exitCode = code;
+  });
 }

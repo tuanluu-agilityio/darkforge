@@ -30,7 +30,7 @@ One question per message. Each says in one sentence why it matters and offers yo
 ## 5. Apply
 Write the answers to a temp file outside the repo (e.g. the OS temp dir) as:
 `{ "config": { <only fields that differ from defaults or were answered> }, "constraints": ["..."], "openQuestions": [...], "createGate": true|false }`
-Show the owner a short summary, then run `df init apply --answers <file>`. It prints `written`/`skipped` per file and never overwrites memory-bank or docs files that exist; only the config and the marked block in `CLAUDE.md` change on a re-run.
+Show the owner a short summary and wait for their OK before you run `df init apply --answers <file>`. It prints `written`/`skipped` per file and never overwrites memory-bank or docs files that exist; only the config and the marked block in `CLAUDE.md` change on a re-run.
 If `createGate` was true: replace the skeleton steps in `scripts/check.ps1` and `scripts/check.sh` with the real commands from question 2, keeping the success-marker line last. Run `df gate`; it must print the marker.
 
 ## 6. Finish

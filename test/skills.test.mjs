@@ -78,3 +78,9 @@ test('hooks.json registers session-brief on SessionStart in exec form', () => {
 test('specialist points to the reviewer method inside the plugin', () => {
   assert.ok(readFileSync(join(root, 'agents', 'specialist.md'), 'utf8').includes('${CLAUDE_PLUGIN_ROOT}/agents/reviewer.md'));
 });
+
+test('next-task: auto-merge pending only in the PR flow; merge-queue stop is explained', () => {
+  const t = read('next-task');
+  assert.match(t, /`auto-merge pending` instead of `done` only when `git\.autoMerge`, `git\.prFlow` and `git\.remote` are all set/);
+  assert.match(t, /merge queue/);
+});

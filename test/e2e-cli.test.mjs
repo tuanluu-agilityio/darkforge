@@ -33,7 +33,7 @@ function tmp(t, prefix) {
   return dir;
 }
 
-test("e2e (local merge): init, brief, start, guard, ledger, lint, gate, merge, report", (t) => {
+test("e2e (local merge): init, brief, begin, guard and dispatch phase, ledger, finish, report", (t) => {
   const root = tmp(t, "df e2e ");
   // Empty template and hooks dirs: global git templates or hooks on a developer machine must not interfere.
   const noHooks = tmp(t, "df hooks ");
@@ -65,6 +65,12 @@ test("e2e (local merge): init, brief, start, guard, ledger, lint, gate, merge, r
   for (const f of [".darkforge/config.json", "memory-bank/activeContext.md", "memory-bank/progress.md", "CLAUDE.md", ".gitignore"]) {
     assert.ok(fs.existsSync(path.join(root, f)), `${f} written`);
   }
+  // a task package, as plan-phase writes it
+  fs.mkdirSync(path.join(root, "docs", "tasks"), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, "docs", "tasks", "001-demo.md"),
+    "# Task 001: Demo\n\nAgent: builder · Model: sonnet · Branch: task/001-demo · Reviewer: reviewer/opus · Risk: medium\n",
+  );
   git(root, "add", "-A");
   git(root, "commit", "-q", "-m", "darkforge init");
   assert.equal(df(root, "memory", "lint").out, "memory: ok\n");
@@ -76,23 +82,28 @@ test("e2e (local merge): init, brief, start, guard, ledger, lint, gate, merge, r
   assert.match(brief, /darkforge project: e2e demo/);
   assert.match(brief, /current task: none/);
 
-  // task start
-  r = df(root, "task", "start", "001", "demo");
+  // task begin: reads the package header, starts the branch, prints who does what
+  r = df(root, "task", "begin", "001");
   assert.equal(r.code, 0, r.err + r.out);
+  assert.match(r.out, /^implementer: darkforge:builder model sonnet$/m);
+  assert.match(r.out, /^reviewer: darkforge:reviewer model opus$/m);
   assert.equal(git(root, "branch", "--show-current"), "task/001-demo");
+  const phase = () => JSON.parse(fs.readFileSync(path.join(root, ".darkforge", "state.json"), "utf8")).phase;
 
-  // model guard: banned model denied, routed darkforge call allowed
+  // model guard: banned model denied; allowed darkforge dispatches set the ledger phase
   const agent = (tool_input) => hook("model-guard", root, { session_id: "s1", cwd: root, hook_event_name: "PreToolUse", tool_name: "Agent", tool_input });
   r = agent({ subagent_type: "general-purpose", prompt: "x", model: "fable" });
   const deny = JSON.parse(r.out).hookSpecificOutput;
   assert.equal(deny.permissionDecision, "deny");
   assert.match(deny.permissionDecisionReason, /banned/);
-  r = agent({ subagent_type: "darkforge:builder", prompt: "x", model: "sonnet" });
+  r = agent({ subagent_type: "darkforge:reviewer", prompt: "x", model: "opus" });
   assert.equal(r.code, 0);
   assert.ok(!r.out.includes('"deny"'), r.out);
+  assert.equal(phase(), "review");
+  r = agent({ subagent_type: "darkforge:builder", prompt: "x", model: "sonnet" });
+  assert.equal(phase(), "implement");
 
   // implementer finishes: ledger records its tokens under task 001, phase implement
-  assert.equal(df(root, "ledger", "phase", "implement").code, 0);
   r = hook("ledger", root, {
     session_id: "s1",
     cwd: root,
@@ -103,27 +114,24 @@ test("e2e (local merge): init, brief, start, guard, ledger, lint, gate, merge, r
   });
   assert.equal(r.code, 0, r.err);
 
-  // the work and the memory bank, committed on the task branch
+  // the implementer's commit; the memory bank edited by the main session and left for task finish
   fs.writeFileSync(path.join(root, "feature.txt"), "x\n");
+  git(root, "add", "feature.txt");
+  git(root, "commit", "-q", "-m", "task 001");
   fs.appendFileSync(path.join(root, "memory-bank", "progress.md"), "| 001 | task/001-demo | builder | sonnet | done | - |\n");
   const ac = path.join(root, "memory-bank", "activeContext.md");
   fs.writeFileSync(ac, fs.readFileSync(ac, "utf8").replace("## Where we are\n", "## Where we are\n\nTask 001 done.\n"));
-  git(root, "add", "-A");
-  git(root, "commit", "-q", "-m", "task 001");
-  assert.equal(df(root, "memory", "lint").out, "memory: ok\n");
 
-  // merge refuses before the gate, then the gate passes on this commit and the merge lands
-  r = df(root, "task", "merge", "001", "--title", "Demo");
-  assert.notEqual(r.code, 0);
-  assert.match(r.out + r.err, /gate has not passed/);
-  r = df(root, "gate");
+  // task finish: tokens into progress.md, memory-bank commit, lint, gate, merge, ledger row
+  r = df(root, "task", "finish", "001", "--title", "Demo");
   assert.equal(r.code, 0, r.out + r.err);
+  assert.match(r.out, /^memory: ok$/m);
   assert.match(r.out, /^ALL CHECKS PASSED$/m);
-  r = df(root, "task", "merge", "001", "--title", "Demo");
-  assert.equal(r.code, 0, r.out + r.err);
+  assert.match(r.out, /^tokens 001: implement [1-9]\d* /m);
   assert.equal(git(root, "branch", "--show-current"), "main");
   assert.equal(git(root, "branch", "--list", "task/001-demo"), "", "merged task branch deleted");
   assert.ok(fs.existsSync(path.join(root, "feature.txt")));
+  assert.match(fs.readFileSync(path.join(root, "memory-bank", "progress.md"), "utf8"), /\| 001 \| task\/001-demo \| builder \| sonnet \| done \| [1-9]\d* \|/);
   assert.equal(git(root, "status", "--porcelain"), "", "tree clean after merge");
 
   // ledger report lists the task; brief shows no current task again

@@ -15,7 +15,7 @@ Read `memory-bank/activeContext.md`, `memory-bank/progress.md` and the phase pla
 The review's records are merged like a task, and its tokens land under its id. Id `<RID>` = `P<N>R`; if `git branch -a --list "*task/P<N>R-*"` lists a branch or `progress.md` has a `| P<N>R ` row (an earlier review), use `P<N>R2`, then `P<N>R3`, and so on. Run `df task start <RID> review`.
 
 ## 3. Review
-Apply `model-routing` for the `high` risk reviewer tier: use `routing.high.reviewer.model`. Run `df ledger phase review`, then dispatch `darkforge:security-reviewer` (read-only, tool-restricted) with that `model` explicitly and this prompt:
+Apply `model-routing` for the `high` risk reviewer tier: use `routing.high.reviewer.model`. Dispatch `darkforge:security-reviewer` (read-only, tool-restricted) with that `model` explicitly and this prompt:
 
 `Read-only whole-phase review of phase N. Plan: docs/plans/phase-N-<slug>.md. Packages: docs/tasks/<ids>. Base ref: <base>. Report APPROVED or CHANGES REQUIRED with file:line defects. Check: interface contracts that drifted between tasks; constraint bypasses (constraintsPath); Review Focus items without a test that proves them; claims in docs or reports not backed by a test or command output. Do not edit files. Run the gate once; its result is your last line.`
 
@@ -28,9 +28,9 @@ For each `blocking` defect: add a fix task to the phase plan table and write its
 Tick each item of the plan's exit checklist only with evidence next to it (the reviewer's gate line, test name, PR number or commit). An item without evidence stays unticked.
 
 ## 6. Record and merge
-- `progress.md`: row `| <RID> | task/<RID>-review | security-reviewer | <model> | done | <total from df ledger report> |`.
+- `progress.md`: row `| <RID> | task/<RID>-review | security-reviewer | <model> | done | - |` (`task finish` fills the tokens).
 - `activeContext.md`: phase N complete (or blocked by the fix tasks); `## Next` = next phase planning or the first fix task.
 - `decisions.md`: one line per decision made.
-Stage only `git add memory-bank/ docs/plans docs/tasks` (never `git add -A` or `.`), commit `docs: phase N review`, then `df memory lint`, `df gate`, `df ledger phase orchestrator`, `df task merge <RID> --title "Phase N review"`.
+Stage only `git add docs/plans docs/tasks` (never `git add -A` or `.`), commit `docs: phase N review`, then `df task finish <RID> --title "Phase N review"` (commits `memory-bank/`, `memory lint`, gate, merge; if it stops, fix what it names and re-run).
 
 Tell the owner briefly: verdict, defects and fix tasks, checklist result, phase tokens from `df ledger report`.

@@ -41,6 +41,21 @@ It writes `.darkforge/config.json`, `memory-bank/`, the constraints file, a mark
 
 When a session starts in a darkforge project, a three-line brief names the project and the current task.
 
+Inside `next-task`, two CLI commands do the mechanical steps, so the main session spends its model calls on dispatch, review and the memory bank:
+
+- `darkforge task begin <id>` reads the package header (agent, model, branch, reviewer, risk), refuses a task that an open `Q-NN` names or whose models the policy denies, starts or resumes `task/<id>-<slug>`, and prints the implementer, the reviewer and the base ref.
+- `darkforge task finish <id> --title "<title>"` fills the task's token total into its `progress.md` row (a `-` in the Tokens cell), commits `memory-bank/` only, runs `memory lint` and the gate, merges, and prints the task's ledger row. It stops at the first failure with that step's output; a failing gate ends with `next: fix round`. A re-run continues where it stopped.
+
+`task start` and `task merge` remain for `plan-phase` and `phase-review` and for manual use.
+
+## Keeping token use down
+
+The first live end-to-end run (`docs/testing/e2e-checklist.md`, run A) measured where tokens go: the main session (the one you type in) used 85% of them, the subagents 15%, and 93% of all tokens were cache reads. Each model call of the main session re-reads its whole context, so its cost is roughly the number of calls times the context size.
+
+- **One task per session.** `next-task` ends by asking you to start a fresh session (`/clear`) before the next task; the memory bank carries everything the next one needs. Running several tasks in one session makes every later call re-read the earlier tasks.
+- **The main session's model is your session model.** Subagents always use their routed models, but the orchestration itself runs on whatever `/model` is set. A cheaper session model lowers the cost of the largest share; the routed implementers and reviewers are not affected.
+- **Keep the memory bank short.** `activeContext.md` stays under 60 lines (lint rule) and is read at every start.
+
 ## Superpowers (optional)
 
 darkforge works without other plugins. With `superpowers: "auto"` (default) and the [superpowers](https://github.com/obra/superpowers) plugin installed:
@@ -83,7 +98,7 @@ Token ledger (`hooks/ledger.mjs`, `darkforge ledger report`) is best effort:
 - Sidechain lines are counted: a subagent transcript (SubagentStop `agent_transcript_path`) marks every line `isSidechain: true`, and a main transcript has none, so nothing is counted twice.
 - `tokens` includes cache reads, which are billed far cheaper than other input; each record also stores `usage` (input, output, cache write, cache read), and the report prints the grand-total breakdown.
 - Read offsets are kept per transcript in `.darkforge/offsets/`, so a resumed subagent is counted only for its new lines.
-- Task and phase come from `.darkforge/state.json` at the moment the hook runs; set the phase with `darkforge ledger phase <implement|review|fix|orchestrator>`. A subagent that finishes after the phase changed is recorded under the new phase.
+- Task and phase come from `.darkforge/state.json` at the moment the hook runs; set the phase with `darkforge ledger phase <implement|review|fix|orchestrator>`. The model-guard hook also sets it when it allows a darkforge dispatch during a task (builder, specialist, scaffolder: `implement`; reviewer, security-reviewer: `review`); fix rounds go through `SendMessage`, which the hook does not see, so `next-task` sets `fix` and `review` itself. A subagent that finishes after the phase changed is recorded under the new phase.
 - Orchestrator tokens are recorded when the main session's turn ends (Stop). The first recorded Stop after `task merge` is attributed to the task just merged; later ones with no active task go to `(no task)`.
 - `.darkforge/ledger.jsonl` is local and git-ignored (init adds it to `.gitignore`), so it never blocks a branch switch. `next-task` copies each task's token total into its `memory-bank/progress.md` row, so the committed history keeps the numbers.
 - Claude Code runs SubagentStop for the built-in web-fetch subagent only from managed settings, so plugin hooks do not record its tokens.

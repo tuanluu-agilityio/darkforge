@@ -2,6 +2,21 @@
 
 ## [0.1.1] - 2026-11-26
 
+### Changed
+
+- `next-task` hands its mechanical steps to two new CLI commands, so the main session makes fewer model calls (re-measured below once run). Run A of the end-to-end checklist measured the main session at 85% of all tokens, with 21 model calls for one task, 12 of them mechanical.
+  - `darkforge task begin <id>` reads the package header, refuses a task an open question names or whose models the policy denies, starts or resumes the branch and prints implementer, reviewer and base ref. The `model-routing` skill is loaded only for escalation.
+  - `darkforge task finish <id> --title` fills the token total into `progress.md`, commits `memory-bank/` only, runs memory lint and the gate, merges and prints the ledger row; it stops at the first failure and a re-run continues.
+- The model-guard hook sets the ledger phase when it allows a darkforge implementer (`implement`) or reviewer (`review`) dispatch during a task.
+- `plan-phase` and `phase-review` close with `task finish`.
+- `next-task` ends by asking for a fresh session (`/clear`) before the next task.
+
+### Added
+
+- User guide: "Keeping token use down", with the measured split and what drives it.
+
+## [Unreleased]
+
 ### Fixed
 
 - `next-task` marked a task `auto-merge pending` whenever `git.autoMerge` was true, even with a local merge (`git.prFlow: false` or `git.remote: null`); the next task then stopped. Only the pull-request flow sets it now.

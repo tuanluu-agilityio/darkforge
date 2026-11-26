@@ -272,13 +272,23 @@ export function mergeTask(root, id, { title } = {}) {
   }
 }
 
-const USAGE = 'usage: darkforge task start <id> <slug>\n       darkforge task merge <id> --title "<title>"\n';
+const USAGE =
+  'usage: darkforge task begin <id>\n       darkforge task finish <id> --title "<title>"\n' +
+  '       darkforge task start <id> <slug>\n       darkforge task merge <id> --title "<title>"\n';
 
-/** CLI handler: darkforge task start|merge ... */
+/** CLI handler: darkforge task begin|finish|start|merge ... */
 export async function taskCommand(args, ctx) {
   const [sub, id, ...rest] = args;
+  // flow.mjs imports this module; load it at call time.
+  const flow = () => import("./flow.mjs");
   let call;
-  if (sub === "start" && id && rest.length === 1) {
+  if (sub === "begin" && id && rest.length === 0) {
+    const { beginTask } = await flow();
+    call = (root) => beginTask(root, id);
+  } else if (sub === "finish" && id && rest.length === 2 && rest[0] === "--title") {
+    const { finishTask } = await flow();
+    call = (root) => finishTask(root, id, { title: rest[1] });
+  } else if (sub === "start" && id && rest.length === 1) {
     call = (root) => startTask(root, id, rest[0]);
   } else if (sub === "merge" && id && rest.length === 2 && rest[0] === "--title") {
     call = (root) => mergeTask(root, id, { title: rest[1] });

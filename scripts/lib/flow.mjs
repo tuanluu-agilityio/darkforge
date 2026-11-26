@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config.mjs";
 import { run } from "./exec.mjs";
-import { runGate } from "./gate.mjs";
+import { gateFresh, runGate } from "./gate.mjs";
 import { decide } from "./guard.mjs";
 import { readRecords } from "./ledger.mjs";
 import { lintMemory } from "./memory.mjs";
@@ -80,8 +80,8 @@ export function blockingQuestions(root, id) {
   for (const l of lines.slice(start + 1, end)) {
     const q = l.match(/\bQ-\d+\b/);
     if (!q) continue;
-    const rest = l.replace(q[0], "");
-    if (idRe.test(rest)) out.push(q[0]);
+    // Drop every question id first, so "see Q-001" never reads as task 001.
+    if (idRe.test(l.replace(/\bQ-\d+\b/g, ""))) out.push(q[0]);
   }
   return out;
 }
@@ -137,7 +137,7 @@ export function taskTokens(root, id) {
   return row;
 }
 
-/** Put the task's token total into its progress.md row when the Tokens (last) cell is "-" or empty. */
+/** Put the task's token total into its progress.md row when the Tokens (last) cell is "-", empty or an older number. */
 export function fillTokens(root, id, total) {
   const file = path.join(root, "memory-bank", "progress.md");
   const text = read(file);
@@ -148,7 +148,8 @@ export function fillTokens(root, id, total) {
     const cells = l.split("|");
     if (cells.length < 4 || cells[1].trim() !== id) return l;
     const last = cells.length - 2; // the cell before the closing "|"
-    if (cells.at(-1).trim() !== "" || !["-", ""].includes(cells[last].trim())) return l;
+    const cell = cells[last].trim();
+    if (cells.at(-1).trim() !== "" || !(cell === "-" || cell === "" || /^\d+$/.test(cell)) || cell === String(total)) return l;
     cells[last] = ` ${total} `;
     changed = true;
     return cells.join("|");
@@ -167,7 +168,17 @@ const out = (r) => [r.stdout, r.stderr].map((s) => (s ?? "").trim()).filter(Bool
 export function finishTask(root, id, { title } = {}) {
   if (typeof id !== "string" || !ID_RE.test(id)) return fail(`invalid id "${id ?? ""}": use letters and digits only`);
   if (typeof title !== "string" || !title.trim()) return fail("a non-empty --title is required");
+  // Only on this task's own branch while it is active: never commit memory-bank/ onto the base or another task.
+  const branch = git(root, ["branch", "--show-current"]).stdout.trim();
+  if (!branch.startsWith(`task/${id}-`) || branch.length === `task/${id}-`.length) {
+    return fail(`refused: not on a task/${id}-* branch (current: ${branch || "detached HEAD"}); nothing was changed`);
+  }
+  if (readState(root).task !== id) return fail(`refused: task ${id} is not the active task (.darkforge/state.json); run task begin ${id} first`);
   const done = [];
+
+  // The gate already passed on this exact commit (a re-run after a merge refusal or a merge queue):
+  // change nothing and go straight to the merge, so the gated commit stays the one that merges.
+  if (gateFresh(root)) return merge(root, id, title, ["gate: already passed on this commit"]);
 
   if (fillTokens(root, id, taskTokens(root, id).total)) done.push("tokens: progress.md row filled");
   const changes = git(root, ["status", "--porcelain", "--", "memory-bank"]);
@@ -187,7 +198,10 @@ export function finishTask(root, id, { title } = {}) {
   const gate = runGate(root);
   if (!gate.ok) return fail([...done, gate.output, "next: fix round (send these lines to the implementer), then re-run task finish"].join("\n"));
   done.push(gate.output);
+  return merge(root, id, title, done);
+}
 
+function merge(root, id, title, done) {
   writeState(root, { phase: "orchestrator" });
   const merged = mergeTask(root, id, { title });
   if (!merged.ok) return fail([...done, merged.message].join("\n"));

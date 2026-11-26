@@ -44,7 +44,7 @@ When a session starts in a darkforge project, a three-line brief names the proje
 Inside `next-task`, two CLI commands do the mechanical steps, so the main session spends its model calls on dispatch, review and the memory bank:
 
 - `darkforge task begin <id>` reads the package header (agent, model, branch, reviewer, risk), refuses a task that an open `Q-NN` names or whose models the policy denies, starts or resumes `task/<id>-<slug>`, and prints the implementer, the reviewer and the base ref.
-- `darkforge task finish <id> --title "<title>"` fills the task's token total into its `progress.md` row (a `-` in the Tokens cell), commits `memory-bank/` only, runs `memory lint` and the gate, merges, and prints the task's ledger row. It stops at the first failure with that step's output; a failing gate ends with `next: fix round`. A re-run continues where it stopped.
+- `darkforge task finish <id> --title "<title>"` fills the task's token total into its `progress.md` row (a `-` in the Tokens cell), commits `memory-bank/` only, runs `memory lint` and the gate, merges, and prints the task's ledger row. It stops at the first failure with that step's output; a failing gate ends with `next: fix round`. A re-run continues where it stopped; if the gate already passed on the current commit (a merge refusal, a merge queue) it changes nothing and goes straight to the merge. It runs only on the task's own branch while that task is active, so it never commits onto the base branch.
 
 `task start` and `task merge` remain for `plan-phase` and `phase-review` and for manual use.
 

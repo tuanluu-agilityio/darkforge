@@ -9,7 +9,7 @@ user-invocable: true
 You orchestrate. You never write task code or tests yourself. `df <args>` means `node "${CLAUDE_PLUGIN_ROOT}/scripts/darkforge.mjs" <args>`. Talk to the owner in `project.ownerLanguage` from `.darkforge/config.json`; files stay in English. When a `df` command exits non-zero, stop and report its output; never work around a refusal. Every model call re-reads this whole session: batch independent tool calls in one message, and read nothing you do not need.
 
 ## 1. Pick
-Read `memory-bank/activeContext.md` and `memory-bank/progress.md` (one message, nothing else). The task is the one under `## Next`. If `## Next` is planning or `phase-review`, tell the owner to run `/darkforge:plan-phase` or `/darkforge:phase-review` and stop.
+Read `memory-bank/activeContext.md` and `memory-bank/progress.md` (one message, nothing else). The task is the one under `## Next`. If `## Next` is planning or `phase-review`, tell the owner to run `/darkforge:plan-phase` or `/darkforge:phase-review` and stop. If a `## Waiting on owner` question blocks it in words (`task begin` only catches rows naming its id), stop and ask.
 If the previous task's row says `auto-merge pending`: `gh pr list --state merged --head task/<id>-<slug> --json number`; if it prints `[]`, tell the owner its PR has not merged and stop; else set that row to `done` in step 5.
 
 ## 2. Begin

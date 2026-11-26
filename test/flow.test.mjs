@@ -78,21 +78,23 @@ test("blockingQuestions: only questions whose row names the task id", (t) => {
   const ac = path.join(root, "memory-bank", "activeContext.md");
   const text = fs.readFileSync(ac, "utf8").replace(
     "## Waiting on owner\n",
-    "## Waiting on owner\n\n| ID | Question | Blocks |\n|---|---|---|\n| Q-01 | Node version? | CI matrix |\n| Q-02 | Export columns? | task 001 |\n| Q-03 | Other? | 0010 |\n",
+    "## Waiting on owner\n\n| ID | Question | Blocks |\n|---|---|---|\n| Q-01 | Node version? | CI matrix |\n| Q-02 | Export columns? | task 001 |\n| Q-03 | Other? | 0010 |\n| Q-04 | Same as Q-001? | docs |\n",
   );
   fs.writeFileSync(ac, text);
-  assert.deepEqual(blockingQuestions(root, "001"), ["Q-02"]);
+  assert.deepEqual(blockingQuestions(root, "001"), ["Q-02"], "Q-04 mentions Q-001, not task 001");
   assert.deepEqual(blockingQuestions(root, "002"), []);
 });
 
-test("fillTokens fills '-' in the task's row only, keeps numbers and CRLF", (t) => {
+test("fillTokens fills or refreshes the task's row only, keeps other rows and CRLF", (t) => {
   const root = project(t);
   const file = path.join(root, "memory-bank", "progress.md");
-  fs.writeFileSync(file, "| Task | Tokens |\r\n|---|---|\r\n| 000 | 5 |\r\n| 001 | - |\r\n| 0010 | - |\r\n");
+  fs.writeFileSync(file, "| Task | Tokens |\r\n|---|---|\r\n| 000 | 5 |\r\n| 001 | - |\r\n| 0010 | - |\r\n| 002 | n/a |\r\n");
   assert.equal(fillTokens(root, "001", 1234), true);
-  assert.equal(fs.readFileSync(file, "utf8"), "| Task | Tokens |\r\n|---|---|\r\n| 000 | 5 |\r\n| 001 | 1234 |\r\n| 0010 | - |\r\n");
-  assert.equal(fillTokens(root, "001", 99), false, "a filled number is never overwritten");
-  assert.equal(fillTokens(root, "000", 99), false);
+  assert.equal(fs.readFileSync(file, "utf8"), "| Task | Tokens |\r\n|---|---|\r\n| 000 | 5 |\r\n| 001 | 1234 |\r\n| 0010 | - |\r\n| 002 | n/a |\r\n");
+  assert.equal(fillTokens(root, "001", 1234), false, "same number: no change");
+  assert.equal(fillTokens(root, "001", 2000), true, "an older number is refreshed (after a fix round)");
+  assert.match(fs.readFileSync(file, "utf8"), /\| 001 \| 2000 \|/);
+  assert.equal(fillTokens(root, "002", 99), false, "text the owner wrote is left alone");
 });
 
 // ---------- begin ----------
@@ -222,3 +224,52 @@ test("finish: refuses a bad id or empty title before touching anything", (t) => 
   assert.match(finishTask(root, "001", { title: " " }).message, /--title is required/);
   assert.deepEqual(taskTokens(root, "001"), { implement: 0, review: 0, fix: 0, orchestrator: 0, total: 0 });
 });
+
+test("finish refuses off the task branch or when the task is not active, changing nothing", (t) => {
+  const root = project(t);
+  const head = git(root, "rev-parse", "HEAD");
+  let r = finishTask(root, "001", { title: "Demo" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /not on a task\/001-\* branch \(current: main\)/);
+  assert.equal(git(root, "rev-parse", "HEAD"), head, "no commit on main");
+
+  workDone(root);
+  fs.writeFileSync(path.join(root, ".darkforge", "state.json"), JSON.stringify({ task: null, phase: null }));
+  r = finishTask(root, "001", { title: "Demo" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /task 001 is not the active task/);
+  assert.match(git(root, "status", "--porcelain"), /memory-bank/, "memory bank left uncommitted");
+});
+
+test("finish re-run after a merge refusal, gate still fresh: no file changes, no second gate, straight to the merge", (t) => {
+  const root = project(t);
+  assert.equal(beginTask(root, "001").ok, true);
+  fs.mkdirSync(path.join(root, "src"), { recursive: true });
+  fs.writeFileSync(path.join(root, "src", "a.txt"), "x\n");
+  git(root, "add", "-A");
+  git(root, "commit", "-q", "-m", "work");
+  ledger(root, [{ task: "001", phase: "implement", tokens: 100 }]);
+  // Only progress.md updated: the merge refuses (activeContext.md unchanged), after lint and gate passed.
+  fs.appendFileSync(path.join(root, "memory-bank", "progress.md"), "| 001 | task/001-demo | builder | sonnet | done | - |\n");
+  let r = finishTask(root, "001", { title: "Demo" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /^ALL CHECKS PASSED$/m);
+  assert.match(r.message, /memory bank not updated on this branch.*activeContext\.md/s);
+  const head = git(root, "rev-parse", "HEAD");
+
+  ledger(root, [{ task: "001", phase: "implement", tokens: 100 }, { task: "001", phase: "orchestrator", tokens: 50 }]);
+  r = finishTask(root, "001", { title: "Demo" });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /gate: already passed on this commit/);
+  assert.doesNotMatch(r.message, /ALL CHECKS PASSED|tokens: progress\.md row filled/);
+  assert.equal(git(root, "rev-parse", "HEAD"), head, "the gated commit was left as is");
+
+  const ac = path.join(root, "memory-bank", "activeContext.md");
+  fs.writeFileSync(ac, fs.readFileSync(ac, "utf8").replace("## Where we are\n", "## Where we are\n\nTask 001 done.\n"));
+  r = finishTask(root, "001", { title: "Demo" });
+  assert.equal(r.ok, true, r.message);
+  assert.match(r.message, /tokens: progress\.md row filled/, "the total is refreshed on the full path");
+  assert.match(fs.readFileSync(path.join(root, "memory-bank", "progress.md"), "utf8"), /\| 001 \| task\/001-demo \| builder \| sonnet \| done \| 150 \|/);
+  assert.equal(git(root, "branch", "--show-current"), "main");
+});
+

@@ -38,10 +38,11 @@ async function main() {
     // ledger phase, so the skill need not run `ledger phase implement|review` itself. Never blocks the call.
     try {
       const phase = dispatchPhase(input.tool_input);
-      if (phase && readState(root).task) writeState(root, { phase });
+      const state = readState(root);
+      // An implementer re-dispatched during a fix round (escalation) keeps the phase "fix".
+      if (phase && state.task && !(phase === "implement" && state.phase === "fix")) writeState(root, { phase });
     } catch (e) {
-      process.stderr.write(`darkforge: ledger phase not set, ${oneLine(e?.message ?? e)}
-`);
+      process.stderr.write(`darkforge: ledger phase not set, ${oneLine(e?.message ?? e)}\n`);
     }
     return;
   }

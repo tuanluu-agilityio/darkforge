@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2026-11-26
 
 ### Changed
 
@@ -14,6 +14,12 @@
 ### Added
 
 - User guide: "Keeping token use down", with the measured split and what drives it.
+
+### Known issues
+
+- Only `next-task` was re-measured under 0.2.0; `plan-phase` and `phase-review` were not.
+- End-to-end checklist run B (with superpowers) has not been done yet.
+- Token ledger is best effort; see Known limits in the user guide.
 
 ## [0.1.1] - 2026-11-26
 

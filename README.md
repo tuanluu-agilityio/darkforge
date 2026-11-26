@@ -10,7 +10,10 @@ Long AI sessions drift and get expensive: they re-read whole specs, pick models 
 - the model for each task comes from the project's routing by risk, is always explicit, and banned models are blocked by a hook;
 - the gate must pass on the exact commit that merges;
 - the memory bank holds only the current state, so a new session reads two short files;
+- the mechanical steps (branch, memory-bank commit, lint, gate, merge) are two CLI commands, `task begin` and `task finish`, so the main session's model calls go to judgment;
 - the ledger shows tokens per task, per model and orchestrator vs subagents.
+
+The main session is where most tokens go: in the first measured end-to-end run it used 85% of them. With `task begin` / `task finish` one task's main-session model calls fell from 21 to 8 in a re-run on the same project (one measurement; details in [docs/testing/e2e-checklist.md](docs/testing/e2e-checklist.md)). Run one task per session: see [keeping token use down](docs/user-guide.md#keeping-token-use-down).
 
 No npm dependencies, no network access except `git` and `gh`, no telemetry.
 
@@ -32,7 +35,7 @@ No npm dependencies, no network access except `git` and `gh`, no telemetry.
 
 1. `/darkforge:init` in your repository: answer the interview (one question at a time).
 2. `/darkforge:plan-phase`: plan the first phase and its task packages.
-3. `/darkforge:next-task`: run one task end to end; repeat.
+3. `/darkforge:next-task`: run one task end to end; then `/clear` and repeat.
 4. `/darkforge:phase-review`: close the phase.
 5. `/darkforge:status` at any time.
 

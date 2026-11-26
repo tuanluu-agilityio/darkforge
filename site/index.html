@@ -508,7 +508,8 @@ pause:{en:"Pause",vi:"Tạm dừng"},play:{en:"Play",vi:"Chạy"},done:{en:"Done
 };
 
 /* ---------- data ---------- */
-const FACTS=[[{en:"v0.1.0",vi:"v0.1.0"},{en:"MIT licensed",vi:"Giấy phép MIT"}],[{en:"Zero npm dependencies",vi:"Không có npm dependency"},{en:"Node 18+, git; gh optional",vi:"Node 18+, git; gh tùy chọn"}],[{en:"Windows, macOS, Linux",vi:"Windows, macOS, Linux"},{en:"CI on all three",vi:"CI trên cả ba"}],[{en:"No telemetry",vi:"Không telemetry"},{en:"Network only through git and gh",vi:"Chỉ dùng mạng qua git và gh"}]];
+/* first fact: the latest released version, replaced from CHANGELOG.md once it loads */
+const FACTS=[[{en:"v0.1.1",vi:"v0.1.1"},{en:"MIT licensed",vi:"Giấy phép MIT"}],[{en:"Zero npm dependencies",vi:"Không có npm dependency"},{en:"Node 18+, git; gh optional",vi:"Node 18+, git; gh tùy chọn"}],[{en:"Windows, macOS, Linux",vi:"Windows, macOS, Linux"},{en:"CI on all three",vi:"CI trên cả ba"}],[{en:"No telemetry",vi:"Không telemetry"},{en:"Network only through git and gh",vi:"Chỉ dùng mạng qua git và gh"}]];
 const RAIL=[{en:"Pick",vi:"Chọn task"},{en:"Start + route",vi:"Tạo branch + route"},{en:"Implement",vi:"Thực hiện"},{en:"Review",vi:"Review"},{en:"Fix round",vi:"Vòng sửa"},{en:"Memory bank",vi:"Memory bank"},{en:"Gate",vi:"Gate"},{en:"Merge",vi:"Merge"},{en:"Report",vi:"Báo cáo"}];
 const LOG=[
  [0,"c","> /darkforge:next-task"],
@@ -615,7 +616,7 @@ function parseChangelog(md){
 }
 async function loadReleases(){
   for(const u of ["CHANGELOG.md","../CHANGELOG.md"]){
-    try{const r=await fetch(u,{cache:"no-cache"});if(!r.ok)continue;const p=parseChangelog(await r.text());if(p.length){REL=p;relI=0;relState="ok";renderRel();return;}}catch{}
+    try{const r=await fetch(u,{cache:"no-cache"});if(!r.ok)continue;const p=parseChangelog(await r.text());if(p.length){REL=p;relI=0;relState="ok";const v="v"+p[0].v;FACTS[0][0]={en:v,vi:v};render();return;}}catch{}
   }
   relState="error";renderRel();
 }

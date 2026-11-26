@@ -213,6 +213,9 @@ export function embedJson(data) {
     .replaceAll(String.fromCharCode(0x2029), bs + "u2029");
 }
 
+const META_STATIC = "img-src data:\">";
+const META_LIVE = "connect-src 'self'; img-src data:\">";
+
 /** The page: the template with the data embedded as JSON that cannot close the script element. */
 export function render(data, { live = false } = {}) {
   const template = fs.readFileSync(path.join(PLUGIN_ROOT, "templates", "dashboard.html"), "utf8");
@@ -220,7 +223,13 @@ export function render(data, { live = false } = {}) {
   if (!template.includes("/*DARKFORGE_DATA*/null")) throw new Error("dashboard template has no data placeholder");
   if (!template.includes("/*DARKFORGE_LIVE*/false")) throw new Error("dashboard template has no live placeholder");
   // The flag first: the data is project text and could itself contain the flag's placeholder.
-  return template.replace("/*DARKFORGE_LIVE*/false", live ? "true" : "false").replace("/*DARKFORGE_DATA*/null", () => json);
+  let page = template.replace("/*DARKFORGE_LIVE*/false", live ? "true" : "false");
+  if (live) {
+    // The static page's meta CSP says connect-src none (file:// stays offline); the live page must also be allowed to open its event stream.
+    if (!page.includes(META_STATIC)) throw new Error("dashboard template has no meta CSP to relax");
+    page = page.replace(META_STATIC, () => META_LIVE);
+  }
+  return page.replace("/*DARKFORGE_DATA*/null", () => json);
 }
 
 /**
@@ -247,6 +256,27 @@ function privateDir(dir) {
   if (typeof process.getuid === "function" && st.uid !== process.getuid()) {
     throw new Error(`${dir} belongs to another user; refusing to write the dashboard there (use --out)`);
   }
+}
+
+const escHtml = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/**
+ * --open for the live page: the URL holds a secret token and process arguments are readable by other local users,
+ * so the browser is given a 0600 file in the private per-user directory that only redirects to the URL.
+ */
+export function writeLiveLauncher(root, url) {
+  const stat = defaultOut(root);
+  const dir = path.dirname(stat);
+  privateDir(dir);
+  const file = stat.replace(/.html$/, "-live.html");
+  const u = escHtml(url);
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'"><meta http-equiv="refresh" content="0;url=${u}"><title>darkforge dashboard</title></head>
+<body><p><a href="${u}">Open the live dashboard</a></p></body></html>
+`;
+  fs.rmSync(file, { force: true });
+  fs.writeFileSync(file, html, { mode: 0o600 });
+  return file;
 }
 
 /** Open the page in the default browser. No shell: the path is one argument (no &, | or %VAR% on Windows). */
@@ -321,7 +351,16 @@ async function watchCommand(root, { open, port }, ctx) {
     return 1;
   }
   ctx.stdout(`dashboard: ${server.url}\n`);
-  if (open) openFile(server.url, ctx);
+  let launcher = null;
+  if (open) {
+    try {
+      launcher = writeLiveLauncher(root, server.url);
+      (ctx.opener ?? openFile)(launcher, ctx);
+    } catch (e) {
+      ctx.stderr(`darkforge: could not prepare the browser launch, ${e.message}
+`);
+    }
+  }
   await new Promise((resolve) => {
     const stop = () => {
       process.off("SIGINT", stop);
@@ -332,5 +371,6 @@ async function watchCommand(root, { open, port }, ctx) {
     process.on("SIGTERM", stop);
   });
   await server.close();
+  if (launcher) fs.rmSync(launcher, { force: true });
   return 0;
 }

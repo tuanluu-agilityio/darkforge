@@ -15,7 +15,7 @@ Long AI sessions drift and get expensive: they re-read whole specs, pick models 
 
 The main session is where most tokens go: in the first measured end-to-end run it used 85% of them. With `task begin` / `task finish` one task's main-session model calls fell from 21 to 8 in a re-run on the same project (one measurement; details in [docs/testing/e2e-checklist.md](docs/testing/e2e-checklist.md)). Run one task per session: see [keeping token use down](docs/user-guide.md#keeping-token-use-down).
 
-No npm dependencies, no network access except `git` and `gh`, no telemetry.
+No npm dependencies, no network access except `git` and `gh` (`dashboard --watch` only listens on `127.0.0.1`), no telemetry.
 
 ## Install
 

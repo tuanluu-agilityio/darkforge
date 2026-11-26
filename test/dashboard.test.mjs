@@ -225,5 +225,16 @@ test("template: EventSource only inside the if(LIVE) block; waiting questions es
   assert.equal(script.replace(block, "").includes("EventSource"), false, "no EventSource outside the live block");
   assert.match(script, /wq\.map\(q=>[^\n]*\$\{esc\(q\)\}/, "waiting questions go through esc()");
   assert.match(block, /e\.data===lastRaw/, "unchanged payloads skip the render");
-  assert.match(block, /\.focus\(\)/, "focus is restored after a render");
+  assert.match(block, /\.focus\(\{preventScroll:true\}\)/, "focus is restored after a render without scrolling");
+  assert.match(block, /readyState===2/, "a closed-for-good stream says to restart");
+});
+
+const STATIC_META = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">`;
+const metas = (html) => html.match(/<meta http-equiv="Content-Security-Policy"[^>]*>/g) ?? [];
+
+test("meta CSP: static page stays connect-src none, live page allows connect-src 'self'", (t) => {
+  const d = collect(project(t));
+  assert.deepEqual(metas(render(d)), [STATIC_META]);
+  const live = metas(render(d, { live: true }));
+  assert.ok(live.every((m) => m.includes("connect-src 'self'")), live.join(" "));
 });

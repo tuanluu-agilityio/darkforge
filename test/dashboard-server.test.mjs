@@ -115,6 +115,7 @@ test("the page is live and locked down", async (t) => {
   assert.equal(r.status, 200);
   assert.match(r.headers["content-type"], /text\/html/);
   assert.ok(r.body.includes("const LIVE=true"));
+  for (const m of r.body.match(/<meta http-equiv="Content-Security-Policy"[^>]*>/g) ?? []) assert.ok(m.includes("connect-src 'self'"), m);
   assert.equal(r.headers["content-security-policy"], CSP);
   assert.equal(r.headers["cache-control"], "no-store");
   assert.equal(r.headers["x-content-type-options"], "nosniff");
@@ -265,4 +266,28 @@ test("CLI rejects --watch with --out and a bad --port", async (t) => {
     assert.equal(code, 1, argv.join(" "));
     assert.match(err, /usage: darkforge dashboard/);
   }
+});
+
+test("--open in watch mode opens a private redirect file, never the URL", async (t) => {
+  const root = project(t);
+  let out = "";
+  let opened;
+  const ran = main(["dashboard", "--watch", "--open"], {
+    cwd: root,
+    stdout: (x) => (out += x),
+    stderr: () => {},
+    opener: (f) => (opened = f),
+  });
+  for (let i = 0; i < 100 && !opened; i++) await new Promise((r) => setTimeout(r, 20));
+  assert.ok(opened, "opener was called");
+  const url = out.match(/dashboard: (http\S+)/)[1];
+  assert.ok(!opened.startsWith("http"), "opener gets a file path");
+  assert.ok(fs.existsSync(opened));
+  const html = fs.readFileSync(opened, "utf8");
+  assert.ok(html.includes(url));
+  assert.ok(html.includes("default-src 'none'"));
+  if (process.platform !== "win32") assert.equal(fs.statSync(opened).mode & 0o777, 0o600);
+  process.emit("SIGINT");
+  assert.equal(await ran, 0);
+  assert.equal(fs.existsSync(opened), false, "removed on shutdown");
 });

@@ -1,7 +1,7 @@
 // SubagentStop / Stop hook: append token-usage records to .darkforge/ledger.jsonl (best effort).
 // Silent (exit 0, no output) outside a darkforge project, for other events, and on malformed input.
 import { findProjectRoot, loadConfig } from "../scripts/lib/config.mjs";
-import { writeState } from "../scripts/lib/state.mjs";
+import { readState, writeState } from "../scripts/lib/state.mjs";
 import { recordStop, recordSubagentStop } from "../scripts/lib/ledger.mjs";
 
 const oneLine = (s) => String(s).replace(/\s*[\r\n]+\s*/g, " ").trim();
@@ -37,7 +37,7 @@ async function main() {
   else {
     // A finished turn means no question is waiting any more; own try/catch so a ledger failure never keeps a stale one.
     try {
-      writeState(root, { waiting: undefined });
+      if (readState(root).waiting !== undefined) writeState(root, { waiting: undefined });
     } catch (e) {
       process.stderr.write(`darkforge: waiting not cleared, ${oneLine(e?.message ?? e)}\n`);
     }

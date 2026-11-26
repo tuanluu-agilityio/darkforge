@@ -4,7 +4,7 @@
 
 ### Changed
 
-- `next-task` hands its mechanical steps to two new CLI commands, so the main session makes fewer model calls (re-measured below once run). Run A of the end-to-end checklist measured the main session at 85% of all tokens, with 21 model calls for one task, 12 of them mechanical.
+- `next-task` hands its mechanical steps to two new CLI commands, so the main session makes fewer model calls. Re-measured on the run-A fixture (one run per task, `docs/testing/e2e-checklist.md`): main-session calls for task 001 went from 21 to 8, orchestrator tokens fell 66% (task 001) and 43% (task 002), and session cost fell 29% and 20%. Run A of the end-to-end checklist measured the main session at 85% of all tokens, with 21 model calls for one task, 12 of them mechanical.
   - `darkforge task begin <id>` reads the package header, refuses a task an open question names or whose models the policy denies, starts or resumes the branch and prints implementer, reviewer and base ref. The `model-routing` skill is loaded only for escalation.
   - `darkforge task finish <id> --title` fills the token total into `progress.md`, commits `memory-bank/` only, runs memory lint and the gate, merges and prints the ledger row; it stops at the first failure and a re-run continues.
 - The model-guard hook sets the ledger phase when it allows a darkforge implementer (`implement`) or reviewer (`review`) dispatch during a task.

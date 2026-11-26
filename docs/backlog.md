@@ -1,6 +1,6 @@
-# Backlog for 0.1.1
+# Backlog
 
-Minor findings deferred during the 0.1.0 build (triaged by the final review as 'can wait').
+Deferred findings. Items marked (T<N>) come from the 0.1.0 build review.
 
 - E2E checklist run B (with superpowers) not done yet; run A passed on 2026-11-25 (see docs/testing/e2e-checklist.md).
 - Measured in run A (5.24M tokens, ~7.6 USD list): the main session (orchestrator) used 85% of all tokens, subagents 15%; 93% of all tokens were cache reads. next-task 001 alone: 29 main-session turns, orchestrator 1.02M vs implement 285k + review 40k. Cost driver is the number of main-session turns times its context, even in a fresh session. For 0.2.0: fold mechanical steps into fewer CLI calls (e.g. one `df task finish` for lint + gate + merge + report), keep the main session's reads small, and document running the main session on a cheaper model.

@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.1] - 2026-11-26
 
 ### Fixed
 
@@ -16,6 +16,11 @@
 
 - `test/e2e-cli.test.mjs`: an end-to-end run of the CLI and hooks as real processes in a real git repository (init, session brief, task start, model guard, ledger, memory lint, gate, local merge, ledger report), run by CI on every platform.
 - `docs/testing/e2e-checklist.md`: run A results (Windows, headless live session) and its ledger report; the phase-review item names the security-reviewer, as the skill does.
+
+### Known issues
+
+- End-to-end checklist run B (with superpowers) has not been done yet; run A passed on Windows (`docs/testing/e2e-checklist.md`).
+- Token ledger is best effort; see Known limits in the user guide.
 
 ## [0.1.0] - 2026-11-23
 

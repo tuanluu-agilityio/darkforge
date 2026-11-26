@@ -1,6 +1,6 @@
 {
   "name": "darkforge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Spec-driven, token-economical project workflow for Claude Code: model routing, phase and task planning, gated task execution, independent review and a token ledger.",
   "author": { "name": "Tuan Luu" },
   "license": "MIT",

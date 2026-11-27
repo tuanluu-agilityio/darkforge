@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { findProjectRoot, loadConfig } from "./config.mjs";
 import { blockingQuestions } from "./flow.mjs";
 import { readRecords } from "./ledger.mjs";
+import { PRICES_AS_OF, costOf, modelKey, priceFor, resolvePrices } from "./prices.mjs";
 import { PHASES, readState } from "./state.mjs";
 
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -118,6 +119,60 @@ function ledgerSummary(root) {
   };
 }
 
+const r6 = (n) => Math.round(n * 1e6) / 1e6;
+
+/** Estimated cost at API list prices. Unpriced records (unknown model, no usage) add nothing but their tokens are counted apart. */
+function costSummary(root, prices) {
+  const { table, overridden, warnings } = resolvePrices(prices);
+  const slot = () => ({ usd: 0, unpricedTokens: 0 });
+  const byTask = new Map();
+  const byModel = new Map();
+  const byKind = { orchestrator: slot(), subagent: slot() };
+  const byTokenKind = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
+  const unpriced = { records: 0, tokens: 0, models: [] };
+  let total = 0;
+  let assumed1h = 0;
+  let haiku55 = false;
+  const at = (map, key) => {
+    if (!map.has(key)) map.set(key, slot());
+    return map.get(key);
+  };
+  for (const r of readRecords(root)) {
+    const t = typeof r.task === "string" && r.task !== "" ? r.task : "(no task)";
+    const m = typeof r.model === "string" && r.model !== "" ? r.model : "(unknown)";
+    const slots = [at(byTask, t), at(byModel, m), byKind[r.kind === "orchestrator" ? "orchestrator" : "subagent"]];
+    if (modelKey(r.model) === "haiku-5-5") haiku55 = true;
+    const price = r.usage && typeof r.usage === "object" ? priceFor(r.model, table) : null;
+    if (!price) {
+      const n = Number.isFinite(r.tokens) ? r.tokens : 0;
+      for (const s of slots) s.unpricedTokens += n;
+      unpriced.records += 1;
+      unpriced.tokens += n;
+      if (!unpriced.models.includes(m)) unpriced.models.push(m);
+      continue;
+    }
+    const c = costOf(r.usage, price);
+    for (const s of slots) s.usd += c.total;
+    for (const f of Object.keys(byTokenKind)) byTokenKind[f] += c[f];
+    total += c.total;
+    assumed1h += c.assumed1h;
+  }
+  const fin = (map) => Object.fromEntries([...map].map(([k, v]) => [k, { usd: r6(v.usd), unpricedTokens: v.unpricedTokens }]));
+  return {
+    asOf: PRICES_AS_OF,
+    total: r6(total),
+    byTask: fin(byTask),
+    byModel: fin(byModel),
+    byKind: fin(new Map(Object.entries(byKind))),
+    byTokenKind: Object.fromEntries(Object.entries(byTokenKind).map(([k, v]) => [k, r6(v)])),
+    unpriced,
+    assumed1h,
+    haiku55,
+    overridden,
+    warnings,
+  };
+}
+
 const str = (v) => (typeof v === "string" && v !== "" ? v : null);
 const role = (v) => (v && typeof v === "object" && !Array.isArray(v) ? { agent: str(v.agent), model: str(v.model) } : null);
 
@@ -199,6 +254,7 @@ export function collect(root, now = new Date()) {
     phases: plans,
     current: current ? current.n : null,
     ledger: ledgerSummary(root),
+    cost: costSummary(root, config.prices),
     decisions,
     backlog,
   };

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- The dashboard shows estimated cost at API list prices: a total, a price per task, model and spender, and cost by token kind. Unpriced records (unknown model or no usage) are flagged with `+?`, not counted as free. `prices` in `.darkforge/config.json` overrides the built-in table.
+
 ## [0.4.0] - 2026-11-27
 
 ### Added

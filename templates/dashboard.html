@@ -148,6 +148,7 @@ footer{border-top:1px solid var(--line);padding:20px 0 32px;color:var(--dim);fon
       <section class="panel"><div class="ph"><h2 data-t="next"></h2><span class="src">activeContext.md</span></div><div class="pb" style="display:grid;gap:10px"><pre class="txt" id="nextTxt"></pre><div class="cmd"><code id="c1">/clear</code><button class="copy" data-copy="c1">Copy</button></div><div class="cmd"><code id="c2"></code><button class="copy" data-copy="c2">Copy</button></div></div></section>
       <section class="panel"><div class="ph"><h2 id="qH" data-t="questions"></h2><span class="src">activeContext.md</span></div><div class="pb qs" id="questions"></div></section>
       <section class="panel"><div class="ph"><h2 data-t="ledgerH"></h2><span class="src">.darkforge/ledger.jsonl</span></div><div class="pb"><div class="legend" id="legend"></div><div class="bars" id="bars"></div><div class="split2"><div><h3 style="font-size:13px;color:var(--dim);font-weight:500;margin-bottom:8px" data-t="byModel"></h3><div class="kv" id="byModel"></div></div><div><h3 style="font-size:13px;color:var(--dim);font-weight:500;margin-bottom:8px" data-t="byKind"></h3><div class="kv" id="byKind"></div></div></div><p class="note" style="margin-top:14px" id="ledgerNote"></p></div></section>
+      <section class="panel" id="costBox" hidden><div class="ph"><h2 data-t="costKind"></h2><span class="src">.darkforge/ledger.jsonl</span></div><div class="pb"><div class="kv" id="costKinds"></div></div></section>
       <section class="panel"><div class="ph"><h2 data-t="sessH"></h2></div><div class="pb"><p class="note" data-t="sessP"></p><div class="sess" id="sess"></div><div id="sessMsg"></div></div></section>
       <section class="panel"><div class="ph"><h2 data-t="decisions"></h2><span class="src">decisions.md</span></div><div class="pb"><ul class="list" id="decisions"></ul></div></section>
       <section class="panel"><div class="ph"><h2 data-t="backlog"></h2><span class="src">backlog.md</span></div><div class="pb"><ul class="list" id="backlog"></ul></div></section>
@@ -162,6 +163,7 @@ let DATA=/*DARKFORGE_DATA*/null;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const k=n=>n>=1e6?(n/1e6).toFixed(2)+"M":n>=1e3?(n/1e3).toFixed(1)+"k":String(n);
+const fmtUsd=n=>!(n>0)?"$0.00":n<0.005?"<$0.01":n>=1000?"$"+(n/1e3).toFixed(1)+"k":"$"+n.toFixed(2);
 const T={
  phases:["Phases","Các phase"],thTask:["Task","Task"],thTitle:["Title","Tên"],thStatus:["Status","Trạng thái"],thRisk:["Risk","Rủi ro"],thModels:["Implementer → reviewer","Implementer → reviewer"],thDeps:["Depends","Phụ thuộc"],thTokens:["Tokens","Token"],
  detail:["Task detail","Chi tiết task"],next:["Next step","Bước tiếp theo"],questions:["Waiting on you","Đang chờ bạn"],ledgerH:["Tokens by task","Token theo task"],byModel:["By model","Theo model"],byKind:["Who spent them","Ai sử dụng"],
@@ -174,6 +176,8 @@ const T={
  footLive:["Live page served by <code>darkforge dashboard --watch</code> on this computer only. Stop it with Ctrl+C.","Trang trực tiếp do <code>darkforge dashboard --watch</code> phục vụ, chỉ trên máy này. Dừng bằng Ctrl+C."],
  ledgerLive:["Tokens are added when each agent finishes, not while it runs.","Token được cộng khi mỗi agent xong, không phải trong lúc nó đang chạy."],
  liveOn:["Live · updated","Trực tiếp · cập nhật"],liveOff:["Disconnected, retrying","Mất kết nối, đang thử lại"],liveDead:["Disconnected; restart `darkforge dashboard --watch` and open its new URL","Mất kết nối; chạy lại `darkforge dashboard --watch` và mở URL mới"],
+ costFig:["Estimated cost","Chi phí ước tính"],costKind:["Cost by token kind","Chi phí theo loại token"],
+ kInput:["input","input"],kOutput:["output","output"],kCacheW:["cache write","cache write"],kCacheR:["cache read","cache read"],
  askedNow:["asked in Claude Code now","đang hỏi trong Claude Code"],mainSession:["main session","phiên chính"],
 };
 let lang=DATA.ownerLanguage||"en";
@@ -189,11 +193,22 @@ const tok=id=>led.byTask[id]||null;
 const firstPick=()=>{const t=phase()?.tasks||[];return DATA.state.task||(t.find(x=>x.status!=="done")||t.at(-1))?.id||null;};
 sel=firstPick();
 
+/* the cost data may be missing (older data); every cost figure below hides then */
+const own=(o,key)=>o&&Object.hasOwn(o,key)?o[key]:null;
 function render(){
+  const cost=DATA.cost;
   document.documentElement.lang=lang;
   document.querySelectorAll("[data-t]").forEach(el=>el.innerHTML=L(el.dataset.t));
   $("#foot").innerHTML=L(LIVE?"footLive":"foot");
-  $("#ledgerNote").textContent=L("ledgerNote")+(LIVE?" "+L("ledgerLive"):"");
+  const unp=cost?cost.unpriced:null;
+  /* one price per row; "+?" marks tokens that carry no price (unknown model or no usage) */
+  const usd=v=>cost&&v?fmtUsd(v.usd)+(v.unpricedTokens>0?` <span title="${V(k(v.unpricedTokens)+" tokens not priced",k(v.unpricedTokens)+" token chưa có giá")}">+?</span>`:""):"";
+  $("#ledgerNote").textContent=[L("ledgerNote"),LIVE?L("ledgerLive"):"",...(cost?[
+   V(`Estimated at API list prices as of ${cost.asOf}; subscription plans and discounts are not reflected.`,`Ước tính theo giá API niêm yết ngày ${cost.asOf}; không phản ánh gói thuê bao hay chiết khấu.`),
+   unp.records?V(`${unp.records} records unpriced (models ${unp.models.join(", ")}).`,`${unp.records} bản ghi chưa có giá (model ${unp.models.join(", ")}).`):"",
+   cost.assumed1h?V("Cache writes without a 5m/1h split counted as 1-hour.","Cache write không tách 5m/1h được tính theo loại 1 giờ."):"",
+   cost.haiku55?V("Haiku 5.5 prompts over 100k tokens are priced at the lower rate.","Prompt Haiku 5.5 trên 100k token được tính theo giá thấp."):"",
+   ...cost.warnings]:[])].filter(Boolean).join(" ");
   paintLive();
   document.querySelectorAll("[data-lang]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.lang===lang));
   $("#projName").textContent=DATA.project;
@@ -214,6 +229,7 @@ function render(){
   $("#figs").innerHTML=[
    [V("Phase progress","Tiến độ phase"),n?`${done}/${n}`:"—",n?V(`${cnt("run")} running · ${cnt("blocked")} blocked`,`${cnt("run")} đang chạy · ${cnt("blocked")} bị chặn`):V("no tasks","chưa có task"),n?`<div class="meter">${seg("var(--ok)",done)}${seg("var(--acc)",cnt("run"))}${seg("var(--warn)",cnt("pending"))}${seg("var(--err)",cnt("blocked"))}</div>`:""],
    [V("Tokens recorded","Token đã ghi"),led.total?k(led.total):"—",led.total?V(`${cacheShare}% cache reads`,`${cacheShare}% là cache read`):V("no ledger records yet","chưa có bản ghi ledger"),""],
+   ...(cost?[[L("costFig"),fmtUsd(cost.total),V("API list prices, "+cost.asOf,"giá API niêm yết, "+cost.asOf),""]]:[]),
    [V("Main-session share","Phần của phiên chính"),led.total?orchShare+"%":"—",V("orchestrator vs all tokens","orchestrator trên tổng token"),""],
    [V("Waiting on you","Đang chờ bạn"),DATA.questions.length+wq.length,V("open questions","câu hỏi mở"),""],
    [V("Shared sessions","Session dùng chung"),multi.length,V("sessions that ran 2+ tasks","session chạy từ 2 task"),""]
@@ -230,7 +246,7 @@ function render(){
     <td class="c-risk"><span class="risk ${esc(t.risk)}">${esc(t.risk||"-")}</span></td>
     <td class="c-models"><span class="mdl">${esc(t.implementer)}<br>→ ${esc(t.reviewer)}</span></td>
     <td class="c-dep"><span class="mdl">${t.deps.length?esc(t.deps.join(", ")):"—"}</span></td>
-    <td class="num c-tok">${tok(t.id)?k(tok(t.id).total):"—"}</td></tr>`).join("");
+    <td class="num c-tok">${tok(t.id)?k(tok(t.id).total)+(cost?"<br><small>"+usd(own(cost.byTask,t.id))+"</small>":""):"—"}</td></tr>`).join("");
   $("#tasksEmpty").hidden=rows.length>0;
   $("#tasksEmpty").textContent=p?V("No tasks match this filter.","Không có task nào khớp bộ lọc."):V("Plan a phase to see its tasks here.","Lập kế hoạch một phase để thấy các task ở đây.");
   renderDetail();
@@ -242,10 +258,12 @@ function render(){
   $("#legend").innerHTML=PH.map(x=>`<span><i style="background:${COL[x]}"></i>${x}</span>`).join("");
   const entries=Object.entries(led.byTask);
   const mx=Math.max(1,...entries.map(([,v])=>v.total));
-  $("#bars").innerHTML=entries.length?entries.map(([t,v])=>`<div class="brow${t===sel?" sel":""}"><span class="lab" title="${esc(t)}">${esc(t)}</span><div class="stack" style="width:${(v.total/mx*100).toFixed(1)}%" title="${PH.map(x=>x+" "+k(v[x])).join(", ")}">${PH.map(x=>v[x]?`<i style="width:${(v[x]/v.total*100).toFixed(1)}%;background:${COL[x]}"></i>`:"").join("")}</div><em>${k(v.total)}</em></div>`).join(""):`<p class="empty">${V("No ledger records yet.","Chưa có bản ghi ledger.")}</p>`;
+  $("#bars").innerHTML=entries.length?entries.map(([t,v])=>`<div class="brow${t===sel?" sel":""}"><span class="lab" title="${esc(t)}">${esc(t)}</span><div class="stack" style="width:${(v.total/mx*100).toFixed(1)}%" title="${PH.map(x=>x+" "+k(v[x])).join(", ")}">${PH.map(x=>v[x]?`<i style="width:${(v[x]/v.total*100).toFixed(1)}%;background:${COL[x]}"></i>`:"").join("")}</div><em>${k(v.total)}${cost?"<br>"+usd(own(cost.byTask,t)):""}</em></div>`).join(""):`<p class="empty">${V("No ledger records yet.","Chưa có bản ghi ledger.")}</p>`;
   const models=Object.entries(led.byModel).sort((a,b)=>b[1]-a[1]),mm=Math.max(1,...models.map(x=>x[1]));
-  $("#byModel").innerHTML=models.map(([m,v])=>`<div><span class="mono">${esc(m)}</span><b>${k(v)}</b><div class="hbar"><i style="width:${(v/mm*100).toFixed(1)}%"></i></div></div>`).join("")||`<p class="empty">—</p>`;
-  $("#byKind").innerHTML=`<div><span>orchestrator</span><b>${k(led.kinds.orchestrator)}</b></div><div><span>subagents</span><b>${k(led.kinds.subagent)}</b></div><div><span>cache read</span><b>${k(led.cacheRead)}</b></div><div style="border-top:1px solid var(--line);padding-top:6px"><span style="color:var(--ink)">total</span><b>${k(led.total)}</b></div>`;
+  $("#byModel").innerHTML=models.map(([m,v])=>`<div><span class="mono">${esc(m)}</span><b>${k(v)}${cost?" · "+usd(own(cost.byModel,m)):""}</b><div class="hbar"><i style="width:${(v/mm*100).toFixed(1)}%"></i></div></div>`).join("")||`<p class="empty">—</p>`;
+  $("#byKind").innerHTML=`<div><span>orchestrator</span><b>${k(led.kinds.orchestrator)}${cost?" · "+usd(cost.byKind.orchestrator):""}</b></div><div><span>subagents</span><b>${k(led.kinds.subagent)}${cost?" · "+usd(cost.byKind.subagent):""}</b></div><div><span>cache read</span><b>${k(led.cacheRead)}</b></div><div style="border-top:1px solid var(--line);padding-top:6px"><span style="color:var(--ink)">total</span><b>${k(led.total)}</b></div>`;
+  $("#costBox").hidden=!cost;
+  if(cost){const tk=cost.byTokenKind;$("#costKinds").innerHTML=[["kInput","input"],["kOutput","output"],["kCacheW","cacheWrite"],["kCacheR","cacheRead"]].map(([l,f])=>`<div><span>${L(l)}</span><b>${fmtUsd(tk[f])} · ${cost.total>0?Math.round(tk[f]/cost.total*100):0}%</b></div>`).join("");}
   $("#sess").innerHTML=led.sessions.slice(-6).map(s=>`<div><code>${esc(s.id)}</code>${s.tasks.map(t=>`<span class="t">${esc(t)}</span>`).join("")}</div>`).join("");
   $("#sessMsg").innerHTML=!led.sessions.length?`<p class="empty">${V("No session ids in the ledger yet (recorded from darkforge 0.3.0).","Ledger chưa có session id (được ghi từ darkforge 0.3.0).")}</p>`:multi.length?`<div class="warnbox">${V(`${multi.length} session(s) ran more than one task. Start a fresh session (/clear) before each task.`,`${multi.length} session chạy nhiều hơn một task. Hãy mở session mới (/clear) trước mỗi task.`)}</div>`:`<div class="okbox">${V("Every session ran one task.","Mỗi session chỉ chạy một task.")}</div>`;
   $("#decisions").innerHTML=DATA.decisions.length?DATA.decisions.map(d=>`<li><code>${esc(d.id)}</code><span>${esc(d.text)}${d.date?` <span class="note">· ${esc(d.date)}</span>`:""}</span></li>`).join(""):`<li class="empty">${V("No decisions recorded.","Chưa có quyết định nào.")}</li>`;

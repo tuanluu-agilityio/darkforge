@@ -2,9 +2,21 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-27
+
 ### Added
 
-- `darkforge dashboard --watch [--open] [--port <n>]`: serves the dashboard live on `127.0.0.1` (secret token in the URL, read-only, no CORS). The page shows the running step, fix round, questions waiting on the owner and tokens per finished agent, and updates within about a second of a change without losing the selection.
+- `darkforge dashboard --watch [--open] [--port <n>]`: serves the dashboard live on `127.0.0.1` (secret token in the URL, read-only, no CORS). The page shows the running step, fix round, questions waiting on the owner and tokens per finished agent, and updates within about a second of a change without losing the selection, scroll or focus. `--open` opens a private redirect file, so the token never appears in process arguments. Stop it with Ctrl+C.
+- `.darkforge/state.json` records the running step: `since`, `implementer` and `reviewer` (agent and model), and the fix `round`. `task begin`, `ledger phase fix` and the model-guard hook write them.
+- New `ask-watch` hook (PreToolUse/PostToolUse on `AskUserQuestion`) records the questions the session is asking the owner as `waiting`; the Stop hook clears them. `next-task` now asks the owner with `AskUserQuestion`.
+- The static dashboard shows the same running-step fields as a snapshot.
+
+### Known issues
+
+- `dashboard --watch --open` has been tested on Windows only.
+- Token counts arrive when each agent finishes, not while it runs.
+- Reloading the live page while a project file is broken shows a plain error page; an open tab keeps the last good data with a banner.
+- Two `--watch --open` runs on the same project share one launcher file name.
 
 ## [0.3.0] - 2026-11-26
 

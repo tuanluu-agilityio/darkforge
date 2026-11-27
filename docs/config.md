@@ -14,6 +14,7 @@ Project config lives in `.darkforge/config.json`. Only `schemaVersion` is requir
 | `constraintsPath` | string | `"docs/plans/constraints.md"` | Project global-constraints file, relative to the project root. |
 | `riskAreas` | array | `[]` | Areas of the project that always route to high risk. |
 | `routing.<risk>.implementer` / `.reviewer` | `{agent, model}` | see below | Agent and model per risk level (`low`, `medium`, `high`). |
+| `prices` | object | absent | Per-model USD per million tokens override `{input, output, cacheWrite5m, cacheWrite1h, cacheRead}`. Keys are `<family>-<version>` like `opus-5-5`, or a full model id; see the user guide. Only `<family>-<version>` ids (e.g. `claude-opus-5-5`) can be priced; older ids like `claude-3-5-sonnet-…` cannot. |
 | `models.tiers` | array of string | `["haiku","sonnet","opus","fable"]` | Model order, lowest to highest. |
 | `models.banned` | array of string | `[]` | Models subagents must never use. |
 | `models.requireExplicit` | `"darkforge"` \| `"all"` \| `"off"` | `"darkforge"` | Which Agent calls must pass an explicit `model`: darkforge agents only, all agents, or none. |
@@ -34,7 +35,9 @@ Default routing:
 |---|---|---|
 | low | builder / sonnet | reviewer / sonnet |
 | medium | builder / sonnet | reviewer / opus |
-| high | specialist / opus | security-reviewer / opus |
+| high | specialist / sonnet | security-reviewer / opus |
+
+High-risk tasks default to a Sonnet implementer: Sonnet costs half of Opus per token, the Opus reviewer stays, and escalation raises the implementer after `escalation.raiseAfterFixRounds` failed rounds.
 
 ## Known limits
 

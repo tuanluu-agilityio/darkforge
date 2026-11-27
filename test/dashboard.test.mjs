@@ -238,3 +238,120 @@ test("meta CSP: static page stays connect-src none, live page allows connect-src
   const live = metas(render(d, { live: true }));
   assert.ok(live.every((m) => m.includes("connect-src 'self'")), live.join(" "));
 });
+
+// ---- estimated cost ----
+const TPL = () => fs.readFileSync(new URL("../templates/dashboard.html", import.meta.url), "utf8");
+function costProject(t, records, config) {
+  const root = project(t);
+  if (config) {
+    const f = path.join(root, ".darkforge", "config.json");
+    fs.writeFileSync(f, JSON.stringify({ ...JSON.parse(fs.readFileSync(f, "utf8")), ...config }));
+  }
+  const line = (o) => JSON.stringify({ at: "x", agent: null, kind: "subagent", phase: "implement", ...o });
+  fs.writeFileSync(path.join(root, ".darkforge", "ledger.jsonl"), records.map(line).join("\n") + "\n");
+  return root;
+}
+const close = (a, b) => assert.ok(Math.abs(a - b) <= 1e-6, `${a} vs ${b}`);
+const sum = (o, f = (v) => v.usd) => Object.values(o).reduce((s, v) => s + f(v), 0);
+const OPUS = { task: "001", model: "claude-opus-5-5", tokens: 1500000, usage: { input: 1e6, output: 5e5 } }; // 4 + 10
+const OPUS2 = { task: "002", model: "claude-opus-5-5", kind: "orchestrator", phase: "orchestrator", tokens: 2e6, usage: { cacheWrite: 1e6, cacheWrite5m: 1e6, cacheWrite1h: 0, cacheRead: 1e6 } }; // 5 + 0.2
+const SON = { task: "002", model: "claude-sonnet-5-5", tokens: 2e6, usage: { input: 1e6, cacheWrite: 1e6 } }; // 2 + 4 (no split: 1h)
+
+test("cost totals add up", (t) => {
+  const c = collect(costProject(t, [OPUS, OPUS2, SON])).cost;
+  close(c.total, 25.2);
+  close(sum(c.byTask), c.total);
+  close(sum(c.byModel), c.total);
+  close(c.byKind.orchestrator.usd + c.byKind.subagent.usd, c.total);
+  close(sum(c.byTokenKind, (v) => v), c.total);
+  assert.deepEqual(Object.keys(c.byKind), ["orchestrator", "subagent"]);
+  assert.equal(c.asOf, "2026-11-27");
+  assert.equal(c.haiku55, false);
+});
+
+test("unknown model is unpriced, not free", (t) => {
+  const c = collect(costProject(t, [OPUS, { task: "001", model: "claude-mystery-9", tokens: 777, usage: { input: 777 } }])).cost;
+  assert.equal(c.unpriced.records, 1);
+  assert.deepEqual(c.unpriced.models, ["claude-mystery-9"]);
+  assert.equal(c.unpriced.tokens, 777);
+  close(c.total, 14);
+  assert.equal(c.byModel["claude-mystery-9"].usd, 0);
+  assert.equal(c.byModel["claude-mystery-9"].unpricedTokens, 777);
+});
+
+test("partial pricing is marked", (t) => {
+  const d = collect(costProject(t, [OPUS, { task: "001", model: "claude-opus-5-5", tokens: 40 }]));
+  assert.ok(d.cost.byTask["001"].usd > 0);
+  assert.equal(d.cost.byTask["001"].unpricedTokens, 40, "a record without usage is unpriced");
+  assert.match(TPL(), /unpricedTokens>0\?[^\n]*\+\?/);
+});
+
+test("old records count as assumed 1h", (t) => {
+  const c = collect(costProject(t, [{ task: "001", model: "claude-opus-5-5", tokens: 1000, usage: { cacheWrite: 1000 } }])).cost;
+  assert.equal(c.assumed1h, 1000);
+});
+
+test("garbage usage fields cost as zero, never NaN", (t) => {
+  const c = collect(costProject(t, [{ task: "001", model: "claude-opus-5-5", tokens: 5, usage: { input: "x", cacheWrite5m: -5, cacheRead: null } }])).cost;
+  assert.ok(Number.isFinite(c.total));
+  assert.ok(Object.values(c.byTokenKind).every(Number.isFinite));
+});
+
+test("config prices override", (t) => {
+  const one = { input: 1, output: 1, cacheWrite5m: 1, cacheWrite1h: 1, cacheRead: 1 };
+  const c = collect(costProject(t, [OPUS], { prices: { "opus-5-5": one, "sonnet-5-5": { input: 1 } } })).cost;
+  assert.deepEqual(c.overridden, ["opus-5-5"]);
+  close(c.total, 1.5);
+  assert.equal(c.warnings.length, 1);
+  assert.match(c.warnings[0], /sonnet-5-5/);
+});
+
+test("haiku 5.5 record sets the note flag", (t) => {
+  assert.equal(collect(costProject(t, [{ task: "001", model: "claude-haiku-5-5", tokens: 1, usage: { input: 1 } }])).cost.haiku55, true);
+});
+
+test("money format", () => {
+  const m = TPL().match(/const fmtUsd=[^\n]*;/);
+  assert.ok(m, "fmtUsd is defined on one line");
+  const fmtUsd = new Function(`${m[0]};return fmtUsd;`)();
+  assert.equal(fmtUsd(0.001), "<$0.01");
+  assert.equal(fmtUsd(0), "$0.00");
+  assert.equal(fmtUsd(12.3), "$12.30");
+  assert.equal(fmtUsd(0.005), "$0.01");
+  assert.equal(fmtUsd(1234), "$1.2k");
+  assert.equal(fmtUsd(999.996), "$1.0k");
+  assert.equal(fmtUsd(999.99), "$999.99");
+});
+
+test("template: headline and total row carry cost with the unpriced marker; empty ledger shows a dash; note wording", () => {
+  const t = TPL();
+  assert.match(t, /led\.total\?fmtUsd\(cost\.total\)\+\(unp\.tokens>0\?[^\n]*\+\?[^\n]*:""\):"—"/, "headline: dash when empty, +? when unpriced");
+  assert.match(t, /total<\/span><b>\$\{k\(led\.total\)\}\$\{cost\?" · "\+fmtUsd\(cost\.total\)\+\(unp\.tokens>0\?[^\n]*\+\?/, "total row: cost with +?");
+  assert.match(t, /cache read<\/span><b>\$\{k\(led\.cacheRead\)\}<\/b>/, "cache read row stays token-only");
+  assert.match(t, /unp\.records===1\?"record":"records"\} unpriced \(unknown model or no usage breakdown: /);
+  assert.match(t, /bản ghi chưa có giá \(model chưa có giá hoặc không có chi tiết usage: /);
+});
+
+test("page without cost data does not throw", () => {
+  const script = TPL().match(/<script>([\s\S]*)<\/script>/)[1];
+  const uses = script.match(/(?<![A-Za-z.])(?:DATA|d)\.cost\b(?!\?)/g) ?? [];
+  assert.ok(script.includes("cost=DATA.cost"), "one guarded read of DATA.cost");
+  assert.equal(uses.length, 1, `DATA.cost read once, then through a guard: ${uses}`);
+  assert.match(script, /cost\?[^\n]*:""|!cost/, "cost elements are hidden when absent");
+  assert.match(script, /id="costBox"|#costBox/);
+});
+
+test("cost text renders as text", (t) => {
+  const root = costProject(t, [{ task: "001", model: "EVIL" + EVIL, tokens: 5, usage: { input: 5 } }]);
+  const html = render(collect(root), { live: true });
+  assert.ok(!html.includes("</script><img"));
+  assert.equal((html.match(/<\/script>/g) ?? []).length, 1);
+  assert.match(TPL(), /esc\(m\)/, "model names go through esc()");
+});
+
+test("a __proto__ task or model stays a plain key in cost", (t) => {
+  const c = collect(costProject(t, [{ task: "__proto__", model: "__proto__", tokens: 7, usage: { input: 7 } }])).cost;
+  assert.equal(Object.getPrototypeOf(c.byTask), Object.prototype);
+  assert.equal(Object.getOwnPropertyDescriptor(c.byTask, "__proto__").value.unpricedTokens, 7);
+  assert.equal(Object.getOwnPropertyDescriptor(c.byModel, "__proto__").value.unpricedTokens, 7);
+});

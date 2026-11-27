@@ -52,6 +52,14 @@ Inside `next-task`, two CLI commands do the mechanical steps, so the main sessio
 
 `node "<plugin dir>/scripts/darkforge.mjs" dashboard --open` (or ask `/darkforge:status` for a visual view) writes one read-only HTML page and opens it: phases and their tasks with status, risk, models, dependencies and blocking questions; task details (acceptance, tests, tokens); the next step; open questions; tokens by task, by model and orchestrator vs subagents; tasks per Claude Code session; recent decisions and the backlog. Each panel names the file it was read from.
 
+The dashboard also shows an estimated cost in US dollars: a figure in the top row, a price next to each task, model and spender, and a cost-by-token-kind block (input, output, cache write, cache read). It is computed from the ledger at API list prices (the date is shown on the page), so it is an estimate, not a bill: subscription plans, discounts and batch pricing are not reflected. Records with an unknown model or without usage are not priced; they still count in the token figures, and a row that has some of them shows `+?` next to its price. Old records with a cache write that is not split into 5-minute and 1-hour are counted as 1-hour. To correct or add a price, put `prices` in `.darkforge/config.json`, keyed by model (USD per million tokens, all five fields required):
+
+```json
+{ "prices": { "opus-5-5": { "input": 4, "output": 20, "cacheWrite5m": 5, "cacheWrite1h": 8, "cacheRead": 0.2 } } }
+```
+
+Only model ids of the form `<family>-<version>` (for example `claude-opus-5-5`) can be priced; older ids such as `claude-3-5-sonnet-…` cannot. An invalid entry is ignored and reported in the page's note.
+
 - It reads only the project's files (config, `.darkforge/state.json`, `memory-bank/`, `docs/plans/phase-*.md`, `.darkforge/ledger.jsonl`) and writes only the page.
 - The page goes to the OS temp directory (one file per project), so the working tree never changes; `--out <file.html>` writes it elsewhere.
 - The static page makes no network requests (system fonts, data inline) and runs no code from your files: every value is shown as text.
@@ -77,7 +85,7 @@ Set `superpowers` to `"off"` to ignore it.
 
 ## Model policy and model-guard
 
-`routing` maps each risk level (`low`, `medium`, `high`) to an implementer and a reviewer, each with an agent and a model. Areas in `riskAreas` always count as high risk. After `escalation.raiseAfterFixRounds` failed fix rounds the implementer moves up one model tier; after `escalation.askOwnerAfterFixRounds` the session stops and asks you.
+`routing` maps each risk level (`low`, `medium`, `high`) to an implementer and a reviewer, each with an agent and a model. Areas in `riskAreas` always count as high risk. After `escalation.raiseAfterFixRounds` failed fix rounds the implementer moves up one model tier; after `escalation.askOwnerAfterFixRounds` the session stops and asks you. By default high-risk tasks use a `specialist` on Sonnet (half the per-token cost of Opus) with the Opus `security-reviewer`; escalation raises the implementer when fixes fail. Projects set up with `darkforge init` before this default changed have `specialist/opus` written in their config and keep it; set `routing.high.implementer.model` to `"sonnet"` to adopt the new default.
 
 The model-guard hook checks every `Agent` call in a darkforge project:
 

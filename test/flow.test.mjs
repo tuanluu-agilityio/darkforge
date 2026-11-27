@@ -281,3 +281,9 @@ test("finish re-run after a merge refusal, gate still fresh: no file changes, no
   assert.equal(git(root, "branch", "--show-current"), "main");
 });
 
+
+test("task begin allows a high-risk package routed specialist/sonnet under the default policy", (t) => {
+  const root = project(t, { header: "Agent: specialist · Model: sonnet · Branch: task/001-demo · Reviewer: security-reviewer/opus · Risk: high" });
+  const r = beginTask(root, "001");
+  assert.equal(r.ok, true, r.message);
+});

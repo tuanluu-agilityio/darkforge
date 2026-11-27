@@ -23,7 +23,7 @@ One question per message. Each says in one sentence why it matters and offers yo
 2. Stack and gate: build, test and lint commands per OS. If the repo already has a gate script, point `gate.command.windows`/`gate.command.unix` at it and keep it. Otherwise propose `createGate: true` (skeletons `scripts/check.ps1`/`check.sh`). Success marker (default `ALL CHECKS PASSED`). If the commands are "not decided yet", also record the open question "gate has placeholder steps" (blocks: the first task).
 3. Constraints: the project's non-negotiables (privacy, compatibility, licences, no network, ...). Each becomes one line in `constraints`.
 4. Risk areas: parts of the code where any change is high risk (`riskAreas`).
-5. Model policy: models that must never be used (`models.banned`); routing per risk level (show the default table from the config reference); floors per agent (`models.floors`); escalation rounds.
+5. Model policy: models that must never be used (`models.banned`); routing per risk level (show the default table from the config reference); high risk defaults to a Sonnet implementer (half the per-token cost of Opus) with an Opus reviewer, and escalation raises it after failed fix rounds; floors per agent (`models.floors`); escalation rounds.
 6. Git: base branch; remote name or none; pull-request flow; required CI check names; merge method; auto-merge.
 7. Superpowers: `auto` (use if installed) or `off`.
 

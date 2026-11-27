@@ -11,7 +11,11 @@ const USAGE_KEYS = {
   cacheWrite: "cache_creation_input_tokens",
   cacheRead: "cache_read_input_tokens",
 };
-const zeroUsage = () => ({ input: 0, output: 0, cacheWrite: 0, cacheRead: 0 });
+const CACHE_SPLIT_KEYS = {
+  cacheWrite5m: "ephemeral_5m_input_tokens",
+  cacheWrite1h: "ephemeral_1h_input_tokens",
+};
+const zeroUsage = () => ({ input: 0, output: 0, cacheWrite: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0 });
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const ledgerFile = (root) => path.join(root, ".darkforge", "ledger.jsonl");
 
@@ -62,6 +66,12 @@ export function sumUsage(jsonlText, fromLine = 0, skipId = null) {
     const u = zeroUsage();
     for (const [k, key] of Object.entries(USAGE_KEYS)) {
       if (Number.isFinite(msg.usage[key]) && msg.usage[key] > 0) u[k] = msg.usage[key];
+    }
+    const split = msg.usage.cache_creation;
+    if (isObj(split)) {
+      for (const [k, key] of Object.entries(CACHE_SPLIT_KEYS)) {
+        if (Number.isFinite(split[key]) && split[key] > 0) u[k] = split[key];
+      }
     }
     if (id !== null) byId.set(id, u);
     else add(u);

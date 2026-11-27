@@ -96,7 +96,41 @@ test("sumUsage counts sidechain lines (subagent transcripts mark every line) and
     "\n";
   const r = sumUsage(text, 0);
   assert.equal(r.tokens, 110);
-  assert.deepEqual(r.usage, { input: 101, output: 2, cacheWrite: 3, cacheRead: 4 });
+  assert.deepEqual(r.usage, { input: 101, output: 2, cacheWrite: 3, cacheRead: 4, cacheWrite5m: 0, cacheWrite1h: 0 });
+});
+
+const splitLine = (extra = {}, id) =>
+  JSON.stringify({
+    message: {
+      ...(id ? { id } : {}),
+      usage: { input_tokens: 2, output_tokens: 10, cache_creation_input_tokens: 300, cache_read_input_tokens: 1000, ...extra },
+    },
+  }) + "\n";
+
+test("sumUsage reads the 5m/1h cache-write split", () => {
+  const r = sumUsage(splitLine({ cache_creation: { ephemeral_5m_input_tokens: 100, ephemeral_1h_input_tokens: 200 } }), 0);
+  assert.deepEqual(r.usage, { input: 2, output: 10, cacheWrite: 300, cacheRead: 1000, cacheWrite5m: 100, cacheWrite1h: 200 });
+  assert.equal(r.tokens, 1312);
+});
+
+test("missing split leaves both zero", () => {
+  const r = sumUsage(splitLine(), 0);
+  assert.equal(r.usage.cacheWrite5m, 0);
+  assert.equal(r.usage.cacheWrite1h, 0);
+  assert.equal(r.usage.cacheWrite, 300);
+});
+
+test("split on a repeated message id counts once", () => {
+  const cc = { cache_creation: { ephemeral_5m_input_tokens: 100, ephemeral_1h_input_tokens: 200 } };
+  const r = sumUsage(splitLine(cc, "m1") + splitLine(cc, "m1"), 0);
+  assert.equal(r.usage.cacheWrite5m, 100);
+  assert.equal(r.usage.cacheWrite1h, 200);
+});
+
+test("garbage split values are zero", () => {
+  const r = sumUsage(splitLine({ cache_creation: { ephemeral_5m_input_tokens: "5", ephemeral_1h_input_tokens: -3 } }), 0);
+  assert.equal(r.usage.cacheWrite5m, 0);
+  assert.equal(r.usage.cacheWrite1h, 0);
 });
 
 test("SubagentStop on a real-shaped subagent transcript (isSidechain on every line) records non-zero tokens", () => {
@@ -228,7 +262,7 @@ test("SubagentStop records the subagent transcript with task and phase from stat
     agent: "darkforge:builder",
     model: "claude-sonnet-4-6",
     tokens: 500,
-    usage: { input: 150, output: 100, cacheWrite: 50, cacheRead: 200 },
+    usage: { input: 150, output: 100, cacheWrite: 50, cacheRead: 200, cacheWrite5m: 0, cacheWrite1h: 0 },
     session: "abc123",
   });
 });

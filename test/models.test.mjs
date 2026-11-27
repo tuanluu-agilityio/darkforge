@@ -28,7 +28,7 @@ test("isBelowFloor ignores unknown models and floors", () => {
 
 test("route", () => {
   const r = route("high", cfg());
-  assert.deepEqual(r.implementer, { agent: "specialist", model: "opus" });
+  assert.deepEqual(r.implementer, { agent: "specialist", model: "sonnet" });
   assert.deepEqual(r.reviewer, { agent: "security-reviewer", model: "opus" });
   assert.deepEqual(route("low", cfg()).reviewer, { agent: "reviewer", model: "sonnet" });
 });

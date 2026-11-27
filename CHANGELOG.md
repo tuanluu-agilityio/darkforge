@@ -6,6 +6,10 @@
 
 - The dashboard shows estimated cost at API list prices: a total, a price per task, model and spender, and cost by token kind. Unpriced records (unknown model or no usage) are flagged with `+?`, not counted as free. `prices` in `.darkforge/config.json` overrides the built-in table.
 
+### Changed
+
+- High-risk tasks now default to a Sonnet implementer (`specialist/sonnet`, was `specialist/opus`); the `security-reviewer` stays on Opus. Projects without their own `routing.high.implementer` pick this up. Projects that set one keep it; to adopt the new default, set `routing.high.implementer.model` to `"sonnet"` in `.darkforge/config.json` (and in `~/.darkforge/defaults.json` if saved there).
+
 ## [0.4.0] - 2026-11-27
 
 ### Added

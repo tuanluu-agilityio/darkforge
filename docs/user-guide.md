@@ -85,7 +85,7 @@ Set `superpowers` to `"off"` to ignore it.
 
 ## Model policy and model-guard
 
-`routing` maps each risk level (`low`, `medium`, `high`) to an implementer and a reviewer, each with an agent and a model. Areas in `riskAreas` always count as high risk. After `escalation.raiseAfterFixRounds` failed fix rounds the implementer moves up one model tier; after `escalation.askOwnerAfterFixRounds` the session stops and asks you.
+`routing` maps each risk level (`low`, `medium`, `high`) to an implementer and a reviewer, each with an agent and a model. Areas in `riskAreas` always count as high risk. After `escalation.raiseAfterFixRounds` failed fix rounds the implementer moves up one model tier; after `escalation.askOwnerAfterFixRounds` the session stops and asks you. By default high-risk tasks use a `specialist` on Sonnet (half the per-token cost of Opus) with the Opus `security-reviewer`; escalation raises the implementer when fixes fail.
 
 The model-guard hook checks every `Agent` call in a darkforge project:
 

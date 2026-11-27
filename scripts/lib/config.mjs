@@ -10,7 +10,7 @@ export const DEFAULT_CONFIG = {
   routing: {
     low: { implementer: { agent: "builder", model: "sonnet" }, reviewer: { agent: "reviewer", model: "sonnet" } },
     medium: { implementer: { agent: "builder", model: "sonnet" }, reviewer: { agent: "reviewer", model: "opus" } },
-    high: { implementer: { agent: "specialist", model: "opus" }, reviewer: { agent: "security-reviewer", model: "opus" } },
+    high: { implementer: { agent: "specialist", model: "sonnet" }, reviewer: { agent: "security-reviewer", model: "opus" } },
   },
   models: {
     tiers: ["haiku", "sonnet", "opus", "fable"],

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DEFAULT_CONFIG, findProjectRoot, loadConfig } from "../scripts/lib/config.mjs";
+import { DEFAULT_CONFIG, findProjectRoot, loadConfig, validateConfig } from "../scripts/lib/config.mjs";
 
 function tmpProject(cfg) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "darkforge test "));
@@ -106,4 +106,12 @@ test("a __proto__ key in the file never changes an object's prototype", () => {
   assert.equal(Object.getPrototypeOf(r.config), Object.prototype);
   assert.equal(r.config.polluted, undefined);
   assert.equal({}.builder, undefined);
+});
+
+test("high risk defaults to a Sonnet implementer and an Opus reviewer", () => {
+  const want = { implementer: { agent: "specialist", model: "sonnet" }, reviewer: { agent: "security-reviewer", model: "opus" } };
+  assert.deepEqual(DEFAULT_CONFIG.routing.high, want);
+  assert.deepEqual(validateConfig({ schemaVersion: 1 }).config.routing.high, want);
+  const root = tmpProject({ schemaVersion: 1, routing: { high: { implementer: { model: "opus" } } } });
+  assert.equal(loadConfig(root).config.routing.high.implementer.model, "opus");
 });

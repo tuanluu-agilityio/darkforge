@@ -111,7 +111,9 @@ test("a __proto__ key in the file never changes an object's prototype", () => {
 test("high risk defaults to a Sonnet implementer and an Opus reviewer", () => {
   const want = { implementer: { agent: "specialist", model: "sonnet" }, reviewer: { agent: "security-reviewer", model: "opus" } };
   assert.deepEqual(DEFAULT_CONFIG.routing.high, want);
-  assert.deepEqual(validateConfig({ schemaVersion: 1 }).config.routing.high, want);
+  const vr = validateConfig({ schemaVersion: 1 });
+  assert.equal(vr.ok, true);
+  assert.deepEqual(vr.config.routing.high, want);
   const root = tmpProject({ schemaVersion: 1, routing: { high: { implementer: { model: "opus" } } } });
   assert.equal(loadConfig(root).config.routing.high.implementer.model, "opus");
 });

@@ -5,10 +5,11 @@
 ### Added
 
 - The dashboard shows estimated cost at API list prices: a total, a price per task, model and spender, and cost by token kind. Unpriced records (unknown model or no usage) are flagged with `+?`, not counted as free. `prices` in `.darkforge/config.json` overrides the built-in table.
+- Ledger records now carry `usage.cacheWrite5m` and `usage.cacheWrite1h` (5-minute and 1-hour cache writes); `cacheWrite` is still the total.
 
 ### Changed
 
-- High-risk tasks now default to a Sonnet implementer (`specialist/sonnet`, was `specialist/opus`); the `security-reviewer` stays on Opus. Projects without their own `routing.high.implementer` pick this up. Projects that set one keep it; to adopt the new default, set `routing.high.implementer.model` to `"sonnet"` in `.darkforge/config.json` (and in `~/.darkforge/defaults.json` if saved there).
+- High-risk tasks now default to a Sonnet implementer (`specialist/sonnet`, was `specialist/opus`); the `security-reviewer` stays on Opus. New projects (`darkforge init` from this version on) get `specialist/sonnet`. Projects set up with `darkforge init` before this version keep `specialist/opus`, because init wrote the full routing into their config; to adopt the new default, set `routing.high.implementer.model` to `"sonnet"` in `.darkforge/config.json` (and in `~/.darkforge/defaults.json` if saved there). Hand-written configs without that key pick it up automatically.
 
 ## [0.4.0] - 2026-11-27
 

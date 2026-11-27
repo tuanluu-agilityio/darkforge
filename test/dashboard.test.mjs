@@ -319,6 +319,17 @@ test("money format", () => {
   assert.equal(fmtUsd(12.3), "$12.30");
   assert.equal(fmtUsd(0.005), "$0.01");
   assert.equal(fmtUsd(1234), "$1.2k");
+  assert.equal(fmtUsd(999.996), "$1.0k");
+  assert.equal(fmtUsd(999.99), "$999.99");
+});
+
+test("template: headline and total row carry cost with the unpriced marker; empty ledger shows a dash; note wording", () => {
+  const t = TPL();
+  assert.match(t, /led\.total\?fmtUsd\(cost\.total\)\+\(unp\.tokens>0\?[^\n]*\+\?[^\n]*:""\):"—"/, "headline: dash when empty, +? when unpriced");
+  assert.match(t, /total<\/span><b>\$\{k\(led\.total\)\}\$\{cost\?" · "\+fmtUsd\(cost\.total\)\+\(unp\.tokens>0\?[^\n]*\+\?/, "total row: cost with +?");
+  assert.match(t, /cache read<\/span><b>\$\{k\(led\.cacheRead\)\}<\/b>/, "cache read row stays token-only");
+  assert.match(t, /unp\.records===1\?"record":"records"\} unpriced \(unknown model or no usage breakdown: /);
+  assert.match(t, /bản ghi chưa có giá \(model chưa có giá hoặc không có chi tiết usage: /);
 });
 
 test("page without cost data does not throw", () => {

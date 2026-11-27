@@ -58,7 +58,7 @@ The dashboard also shows an estimated cost in US dollars: a figure in the top ro
 { "prices": { "opus-5-5": { "input": 4, "output": 20, "cacheWrite5m": 5, "cacheWrite1h": 8, "cacheRead": 0.2 } } }
 ```
 
-An invalid entry is ignored and reported in the page's note.
+Only model ids of the form `<family>-<version>` (for example `claude-opus-5-5`) can be priced; older ids such as `claude-3-5-sonnet-…` cannot. An invalid entry is ignored and reported in the page's note.
 
 - It reads only the project's files (config, `.darkforge/state.json`, `memory-bank/`, `docs/plans/phase-*.md`, `.darkforge/ledger.jsonl`) and writes only the page.
 - The page goes to the OS temp directory (one file per project), so the working tree never changes; `--out <file.html>` writes it elsewhere.
@@ -85,7 +85,7 @@ Set `superpowers` to `"off"` to ignore it.
 
 ## Model policy and model-guard
 
-`routing` maps each risk level (`low`, `medium`, `high`) to an implementer and a reviewer, each with an agent and a model. Areas in `riskAreas` always count as high risk. After `escalation.raiseAfterFixRounds` failed fix rounds the implementer moves up one model tier; after `escalation.askOwnerAfterFixRounds` the session stops and asks you. By default high-risk tasks use a `specialist` on Sonnet (half the per-token cost of Opus) with the Opus `security-reviewer`; escalation raises the implementer when fixes fail.
+`routing` maps each risk level (`low`, `medium`, `high`) to an implementer and a reviewer, each with an agent and a model. Areas in `riskAreas` always count as high risk. After `escalation.raiseAfterFixRounds` failed fix rounds the implementer moves up one model tier; after `escalation.askOwnerAfterFixRounds` the session stops and asks you. By default high-risk tasks use a `specialist` on Sonnet (half the per-token cost of Opus) with the Opus `security-reviewer`; escalation raises the implementer when fixes fail. Projects set up with `darkforge init` before this default changed have `specialist/opus` written in their config and keep it; set `routing.high.implementer.model` to `"sonnet"` to adopt the new default.
 
 The model-guard hook checks every `Agent` call in a darkforge project:
 

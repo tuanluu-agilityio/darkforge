@@ -129,7 +129,9 @@ test("writeState creates .darkforge, merges, and drops a legacy offsets key", ()
   const root = tmpProject(false);
   writeState(root, { task: "006-ledger" });
   writeState(root, { phase: "implement" });
-  assert.deepEqual(readState(root), { task: "006-ledger", phase: "implement" });
+  const { since, ...state } = readState(root);
+  assert.equal(typeof since, "string");
+  assert.deepEqual(state, { task: "006-ledger", phase: "implement" });
   const file = path.join(root, ".darkforge", "state.json");
   fs.writeFileSync(file, JSON.stringify({ task: "T", phase: "fix", offsets: { a: 1 } }));
   assert.deepEqual(readState(root), { task: "T", phase: "fix" });
@@ -385,4 +387,21 @@ test("ledger report prints the report; no project exits 1", async () => {
   c = capture(dir);
   assert.equal(await main(["ledger"], c.ctx), 1);
   assert.match(c.out.stderr, /usage/);
+});
+
+test("Stop with no waiting leaves state.json untouched; with waiting it clears it", () => {
+  const dir = tmpProject();
+  writeState(dir, { task: "T5", phase: "fix" });
+  const t = path.join(dir, "main transcript.jsonl");
+  fs.writeFileSync(t, mainText());
+  const sf = path.join(dir, ".darkforge", "state.json");
+  const before = fs.readFileSync(sf);
+  const old = new Date(2020, 0, 1);
+  fs.utimesSync(sf, old, old);
+  runHook(dir, hookInput("stop.json", { cwd: dir, transcript_path: t }));
+  assert.ok(before.equals(fs.readFileSync(sf)), "state.json bytes unchanged");
+  assert.equal(fs.statSync(sf).mtimeMs, old.getTime(), "state.json not rewritten");
+  writeState(dir, { waiting: { since: "x", questions: ["q"] } });
+  runHook(dir, hookInput("stop.json", { cwd: dir, transcript_path: t }));
+  assert.equal(readState(dir).waiting, undefined);
 });

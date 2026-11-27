@@ -118,6 +118,26 @@ function ledgerSummary(root) {
   };
 }
 
+const str = (v) => (typeof v === "string" && v !== "" ? v : null);
+const role = (v) => (v && typeof v === "object" && !Array.isArray(v) ? { agent: str(v.agent), model: str(v.model) } : null);
+
+/** The running step from state.json; the file is untrusted, so every field is reduced to a string, integer or null. */
+function runningStep(state) {
+  const w = state.waiting;
+  return {
+    task: str(state.task),
+    phase: str(state.phase),
+    since: str(state.since),
+    round: Number.isInteger(state.round) && state.round >= 0 ? state.round : 0,
+    implementer: role(state.implementer),
+    reviewer: role(state.reviewer),
+    waiting:
+      w && typeof w === "object" && !Array.isArray(w)
+        ? { since: str(w.since), questions: Array.isArray(w.questions) ? w.questions.filter((q) => typeof q === "string" && q !== "") : [] }
+        : null,
+  };
+}
+
 /** Everything the page shows, read from the project's files. Pure data: strings and numbers only. */
 export function collect(root, now = new Date()) {
   const loaded = loadConfig(root);
@@ -172,7 +192,7 @@ export function collect(root, now = new Date()) {
     ownerLanguage: config.project.ownerLanguage === "vi" ? "vi" : "en",
     generatedAt: now.toISOString(),
     plugin: version,
-    state: { task: state.task, phase: state.phase },
+    state: runningStep(state),
     where: text(section(active, "## Where we are")),
     next: text(section(active, "## Next")),
     questions,
@@ -184,17 +204,32 @@ export function collect(root, now = new Date()) {
   };
 }
 
-/** The page: the template with the data embedded as JSON that cannot close the script element. */
-export function render(data) {
-  const template = fs.readFileSync(path.join(PLUGIN_ROOT, "templates", "dashboard.html"), "utf8");
-  // "<" is written as an escape, so no "</script>" in the data can end the element; U+2028/2029 likewise.
+/** JSON for embedding in a script element or an SSE line: "<" and U+2028/2029 are written as escapes, so it stays one line and cannot close the element. */
+export function embedJson(data) {
   const bs = String.fromCharCode(92); // a backslash, spelled out
-  const json = JSON.stringify(data)
+  return JSON.stringify(data)
     .replaceAll("<", bs + "u003c")
     .replaceAll(String.fromCharCode(0x2028), bs + "u2028")
     .replaceAll(String.fromCharCode(0x2029), bs + "u2029");
+}
+
+const META_STATIC = "img-src data:\">";
+const META_LIVE = "connect-src 'self'; img-src data:\">";
+
+/** The page: the template with the data embedded as JSON that cannot close the script element. */
+export function render(data, { live = false } = {}) {
+  const template = fs.readFileSync(path.join(PLUGIN_ROOT, "templates", "dashboard.html"), "utf8");
+  const json = embedJson(data);
   if (!template.includes("/*DARKFORGE_DATA*/null")) throw new Error("dashboard template has no data placeholder");
-  return template.replace("/*DARKFORGE_DATA*/null", () => json);
+  if (!template.includes("/*DARKFORGE_LIVE*/false")) throw new Error("dashboard template has no live placeholder");
+  // The flag first: the data is project text and could itself contain the flag's placeholder.
+  let page = template.replace("/*DARKFORGE_LIVE*/false", live ? "true" : "false");
+  if (live) {
+    // The static page's meta CSP says connect-src none (file:// stays offline); the live page must also be allowed to open its event stream.
+    if (!page.includes(META_STATIC)) throw new Error("dashboard template has no meta CSP to relax");
+    page = page.replace(META_STATIC, () => META_LIVE);
+  }
+  return page.replace("/*DARKFORGE_DATA*/null", () => json);
 }
 
 /**
@@ -223,8 +258,29 @@ function privateDir(dir) {
   }
 }
 
+const escHtml = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/**
+ * --open for the live page: the URL holds a secret token and process arguments are readable by other local users,
+ * so the browser is given a 0600 file in the private per-user directory that only redirects to the URL.
+ */
+export function writeLiveLauncher(root, url) {
+  const stat = defaultOut(root);
+  const dir = path.dirname(stat);
+  privateDir(dir);
+  const file = stat.replace(/.html$/, "-live.html");
+  const u = escHtml(url);
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'"><meta http-equiv="refresh" content="0;url=${u}"><title>darkforge dashboard</title></head>
+<body><p><a href="${u}">Open the live dashboard</a></p></body></html>
+`;
+  fs.rmSync(file, { force: true });
+  fs.writeFileSync(file, html, { mode: 0o600 });
+  return file;
+}
+
 /** Open the page in the default browser. No shell: the path is one argument (no &, | or %VAR% on Windows). */
-function openFile(file, ctx) {
+export function openFile(file, ctx) {
   const [cmd, args] =
     process.platform === "win32" ? ["explorer.exe", [file]] : process.platform === "darwin" ? ["open", [file]] : ["xdg-open", [file]];
   const say = () => ctx.stdout("could not open a browser; open the file above\n");
@@ -237,24 +293,33 @@ function openFile(file, ctx) {
   }
 }
 
-const USAGE = "usage: darkforge dashboard [--out <file.html>] [--open]\n";
+const USAGE = "usage: darkforge dashboard [--out <file.html>] [--open] | darkforge dashboard --watch [--open] [--port <n>]\n";
 
 export async function dashboardCommand(args, ctx) {
   let out = null;
   let open = false;
+  let watch = false;
+  let port = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--open") open = true;
+    else if (args[i] === "--watch") watch = true;
     else if (args[i] === "--out" && args[i + 1]) out = args[++i];
+    else if (args[i] === "--port" && /^\d{1,5}$/.test(args[i + 1] ?? "") && Number(args[i + 1]) <= 65535) port = Number(args[++i]);
     else {
       ctx.stderr(USAGE);
       return 1;
     }
+  }
+  if ((watch && out !== null) || (port !== null && !watch)) {
+    ctx.stderr(USAGE);
+    return 1;
   }
   const root = findProjectRoot(ctx.cwd);
   if (!root) {
     ctx.stderr("darkforge: no .darkforge/config.json found in this directory or its parents\n");
     return 1;
   }
+  if (watch) return watchCommand(root, { open, port: port ?? 0 }, ctx);
   let html;
   try {
     html = render(collect(root));
@@ -273,5 +338,39 @@ export async function dashboardCommand(args, ctx) {
   }
   ctx.stdout(`dashboard: ${file}\n`);
   if (open) openFile(file, ctx);
+  return 0;
+}
+
+async function watchCommand(root, { open, port }, ctx) {
+  const { startLiveServer } = await import("./dashboard-server.mjs");
+  let server;
+  try {
+    server = await startLiveServer(root, { port });
+  } catch (e) {
+    ctx.stderr(`darkforge: ${e.message}\n`);
+    return 1;
+  }
+  ctx.stdout(`dashboard: ${server.url}\n`);
+  let launcher = null;
+  if (open) {
+    try {
+      launcher = writeLiveLauncher(root, server.url);
+      (ctx.opener ?? openFile)(launcher, ctx);
+    } catch (e) {
+      ctx.stderr(`darkforge: could not prepare the browser launch, ${e.message}
+`);
+    }
+  }
+  await new Promise((resolve) => {
+    const stop = () => {
+      process.off("SIGINT", stop);
+      process.off("SIGTERM", stop);
+      resolve();
+    };
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
+  });
+  await server.close();
+  if (launcher) fs.rmSync(launcher, { force: true });
   return 0;
 }

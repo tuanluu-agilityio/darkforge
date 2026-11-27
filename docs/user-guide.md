@@ -54,8 +54,9 @@ Inside `next-task`, two CLI commands do the mechanical steps, so the main sessio
 
 - It reads only the project's files (config, `.darkforge/state.json`, `memory-bank/`, `docs/plans/phase-*.md`, `.darkforge/ledger.jsonl`) and writes only the page.
 - The page goes to the OS temp directory (one file per project), so the working tree never changes; `--out <file.html>` writes it elsewhere.
-- The page makes no network requests (system fonts, data inline) and runs no code from your files: every value is shown as text.
-- Run the command again to refresh it. "Tasks per session" needs ledger records with a session id, which darkforge records from this version on.
+- The static page makes no network requests (system fonts, data inline) and runs no code from your files: every value is shown as text.
+- `dashboard --watch [--open] [--port <n>]` serves the same page live instead of writing a file: the running step, round, questions waiting on you, and tokens per finished agent update within about a second, without losing the task you selected. The server listens on `127.0.0.1` only (this computer), the URL contains a secret token that is new on every start (`dashboard: http://127.0.0.1:<port>/<token>/`), it only reads your project's files, and it stops on Ctrl+C. `--watch` cannot be combined with `--out`; a busy `--port` is an error.
+- Without `--watch`, run the command again to refresh the page. "Tasks per session" needs ledger records with a session id, which darkforge records from this version on.
 
 ## Keeping token use down
 

@@ -41,6 +41,11 @@ async function main() {
       const state = readState(root);
       // An implementer re-dispatched during a fix round (escalation) keeps the phase "fix".
       if (phase && state.task && !(phase === "implement" && state.phase === "fix")) writeState(root, { phase });
+      const model = input.tool_input?.model;
+      if (phase && state.task && typeof model === "string" && model !== "") {
+        const agent = input.tool_input.subagent_type.slice("darkforge:".length);
+        writeState(root, { [phase === "review" ? "reviewer" : "implementer"]: { agent, model } });
+      }
     } catch (e) {
       process.stderr.write(`darkforge: ledger phase not set, ${oneLine(e?.message ?? e)}\n`);
     }

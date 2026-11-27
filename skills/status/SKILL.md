@@ -16,4 +16,4 @@ Read-only: change no file in the repository, no branch or state, dispatch no age
    - next step and the command for it (`/darkforge:next-task`, `/darkforge:plan-phase` or `/darkforge:phase-review`);
    - open questions waiting on the owner (ids and one line each);
    - tokens: total, orchestrator vs subagents, the top two models, and the last task's total. Copy numbers from the report; do not recompute.
-4. If the owner asks for a visual or fuller view, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/darkforge.mjs" dashboard --open` and give the path it prints (a read-only HTML page written to the OS temp dir).
+4. If the owner asks for a visual or fuller view, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/darkforge.mjs" dashboard --open` and give the path it prints (a read-only HTML page written to the OS temp dir). To follow a running task live, the owner can run `dashboard --watch --open` in a separate terminal (loopback only, stops on Ctrl+C).

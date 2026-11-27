@@ -119,10 +119,12 @@ export function beginTask(root, id) {
   const base = config.git.remote ? `${config.git.remote}/${config.git.baseBranch}` : config.git.baseBranch;
   const current = run("git", ["branch", "--show-current"], { cwd: root }).stdout.trim();
   if (readState(root).task === id && current === h.branch) {
+    writeState(root, { implementer: h.implementer, reviewer: h.reviewer });
     return { ok: true, message: block(id, h, base, "resumed") };
   }
   const s = startTask(root, id, pkg.slug);
   if (!s.ok) return s;
+  writeState(root, { implementer: h.implementer, reviewer: h.reviewer, round: 0 });
   return { ok: true, message: block(id, h, base) };
 }
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `darkforge dashboard --watch [--open] [--port <n>]`: serves the dashboard live on `127.0.0.1` (secret token in the URL, read-only, no CORS). The page shows the running step, fix round, questions waiting on the owner and tokens per finished agent, and updates within about a second of a change without losing the selection.
+
 ## [0.3.0] - 2026-11-26
 
 ### Added

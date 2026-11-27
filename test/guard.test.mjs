@@ -235,9 +235,8 @@ test("hook: malformed stdin -> exit 0, no output", () => {
 
 test("hooks.json registers model-guard in exec form and runs from a plugin root with spaces", () => {
   const h = JSON.parse(fs.readFileSync(path.join(repo, "hooks", "hooks.json"), "utf8"));
-  const groups = h.hooks.PreToolUse;
+  const groups = h.hooks.PreToolUse.filter((g) => g.matcher === "Agent");
   assert.equal(groups.length, 1);
-  assert.equal(groups[0].matcher, "Agent");
   const handler = groups[0].hooks[0];
   assert.equal(handler.type, "command");
   assert.equal(handler.command, "node");

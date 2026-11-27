@@ -223,7 +223,8 @@ export async function ledgerCommand(args, ctx) {
     return 1;
   }
   if (sub === "phase") {
-    writeState(root, { phase: name });
+    const s = readState(root);
+    writeState(root, name === "fix" ? { phase: name, round: (Number.isInteger(s.round) ? s.round : 0) + 1 } : { phase: name });
     ctx.stdout(`phase: ${name}\n`);
   } else {
     ctx.stdout(report(root) + "\n");

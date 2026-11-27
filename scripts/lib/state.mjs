@@ -41,8 +41,11 @@ export function readState(root) {
 }
 
 /** Shallow-merge `patch` into the stored state and write it atomically; creates `.darkforge/`. */
-export function writeState(root, patch) {
-  const next = { ...readState(root), ...patch };
+export function writeState(root, patch, now = new Date()) {
+  const prev = readState(root);
+  const next = { ...prev, ...patch };
+  if ("phase" in patch && patch.phase !== prev.phase) next.since = now.toISOString();
+  if (patch.task === null) for (const k of ["since", "implementer", "reviewer", "round"]) delete next[k];
   delete next.offsets;
   if (next.lastTask == null) delete next.lastTask;
   writeAtomic(stateFile(root), next);
